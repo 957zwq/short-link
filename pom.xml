@@ -7,8 +7,12 @@
     <groupId>winesasfood.com</groupId>
     <artifactId>short-link</artifactId>
     <version>1.0-SNAPSHOT</version>
-
-
+    <packaging>pom</packaging>
+    <modules>
+        <module>admin</module>
+        <module>project</module>
+        <module>gateway</module>
+    </modules>
 
 
     <properties>
