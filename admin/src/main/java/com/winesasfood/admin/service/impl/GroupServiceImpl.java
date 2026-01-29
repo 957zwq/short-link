@@ -10,6 +10,7 @@ import com.winesasfood.admin.dao.entity.UserDO;
 import com.winesasfood.admin.dao.mapper.GroupMapper;
 import com.winesasfood.admin.dao.mapper.UserMapper;
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
+import com.winesasfood.admin.dto.req.GroupSortReqDTO;
 import com.winesasfood.admin.dto.req.GroupUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 import com.winesasfood.admin.service.GroupService;
@@ -185,5 +186,28 @@ public class GroupServiceImpl implements GroupService {
         group.setDelFlag(1);
         group.setUpdateTime(new Date());
         groupMapper.updateById(group);
+    }
+
+    @Override
+    public void sortGroup(List<GroupSortReqDTO> requestList) {
+        String username = UserContext.getUsername();
+
+        for (GroupSortReqDTO request : requestList) {
+            // 根据gid查询分组
+            LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery();
+            queryWrapper.eq(GroupDO::getGid, request.getGid())
+                    .eq(GroupDO::getDelFlag, 0);
+            GroupDO group = groupMapper.selectOne(queryWrapper);
+
+            if (group != null) {
+                // 验证分组是否属于当前用户
+                if (group.getUsername().equals(username)) {
+                    // 更新排序
+                    group.setSortOrder(request.getSortOrder());
+                    group.setUpdateTime(new Date());
+                    groupMapper.updateById(group);
+                }
+            }
+        }
     }
 }

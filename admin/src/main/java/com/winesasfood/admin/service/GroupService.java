@@ -1,6 +1,7 @@
 package com.winesasfood.admin.service;
 
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
+import com.winesasfood.admin.dto.req.GroupSortReqDTO;
 import com.winesasfood.admin.dto.req.GroupUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 
@@ -39,4 +40,11 @@ public interface GroupService {
      * @param gid 分组标识
      */
     void deleteGroup(String gid);
+
+    /**
+     * 排序短链接分组
+     *
+     * @param requestList 分组排序列表
+     */
+    void sortGroup(List<GroupSortReqDTO> requestList);
 }

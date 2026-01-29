@@ -3,6 +3,7 @@ package com.winesasfood.admin.controller;
 import com.winesasfood.admin.common.result.Result;
 import com.winesasfood.admin.common.result.Results;
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
+import com.winesasfood.admin.dto.req.GroupSortReqDTO;
 import com.winesasfood.admin.dto.req.GroupUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 import com.winesasfood.admin.service.GroupService;
@@ -56,6 +57,13 @@ public class GroupController {
     @DeleteMapping("/api/short-link/admin/v1/group")
     public Result<Void> deleteGroup(@Parameter(description = "分组标识") @RequestParam("gid") String gid) {
         groupService.deleteGroup(gid);
+        return Results.success();
+    }
+
+    @Operation(summary = "排序短链接分组")
+    @PostMapping("/api/short-link/admin/v1/group/sort")
+    public Result<Void> sortGroup(@Valid @RequestBody List<GroupSortReqDTO> requestList) {
+        groupService.sortGroup(requestList);
         return Results.success();
     }
 }
