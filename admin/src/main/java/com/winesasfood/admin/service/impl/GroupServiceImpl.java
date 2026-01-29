@@ -10,6 +10,7 @@ import com.winesasfood.admin.dao.entity.UserDO;
 import com.winesasfood.admin.dao.mapper.GroupMapper;
 import com.winesasfood.admin.dao.mapper.UserMapper;
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
+import com.winesasfood.admin.dto.req.GroupUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 import com.winesasfood.admin.service.GroupService;
 import com.winesasfood.admin.util.RandomGenerator;
@@ -125,5 +126,40 @@ public class GroupServiceImpl implements GroupService {
         }
 
         return resultList;
+    }
+
+    @Override
+    public void updateGroup(GroupUpdateReqDTO request) {
+        String username = UserContext.getUsername();
+
+        // 根据gid查询分组
+        LambdaQueryWrapper<GroupDO> gidQuery = Wrappers.lambdaQuery();
+        gidQuery.eq(GroupDO::getGid, request.getGid())
+                .eq(GroupDO::getDelFlag, 0);
+        GroupDO group = groupMapper.selectOne(gidQuery);
+        if (group == null) {
+            throw new ClientException(GroupErrorCodeEnum.GROUP_NULL);
+        }
+
+        // 验证分组是否属于当前用户
+        if (!group.getUsername().equals(username)) {
+            throw new ClientException(GroupErrorCodeEnum.GROUP_NULL);
+        }
+
+        // 检查新名称是否与该用户下其他分组重复（排除自己）
+        LambdaQueryWrapper<GroupDO> nameQuery = Wrappers.lambdaQuery();
+        nameQuery.eq(GroupDO::getUsername, username)
+                .eq(GroupDO::getName, request.getName())
+                .eq(GroupDO::getDelFlag, 0)
+                .ne(GroupDO::getGid, request.getGid());
+        GroupDO existingGroup = groupMapper.selectOne(nameQuery);
+        if (existingGroup != null) {
+            throw new ClientException(GroupErrorCodeEnum.GROUP_NAME_EXIST);
+        }
+
+        // 更新分组名称
+        group.setName(request.getName());
+        group.setUpdateTime(new Date());
+        groupMapper.updateById(group);
     }
 }

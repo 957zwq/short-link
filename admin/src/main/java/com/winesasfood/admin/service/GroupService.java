@@ -1,6 +1,7 @@
 package com.winesasfood.admin.service;
 
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
+import com.winesasfood.admin.dto.req.GroupUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 
 import java.util.List;
@@ -24,4 +25,11 @@ public interface GroupService {
      * @return 分组列表
      */
     List<GroupRespDTO> getGroupsByUsername();
+
+    /**
+     * 修改短链接分组
+     *
+     * @param request 修改分组请求
+     */
+    void updateGroup(GroupUpdateReqDTO request);
 }
