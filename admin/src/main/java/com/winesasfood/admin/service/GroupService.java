@@ -14,16 +14,14 @@ public interface GroupService {
      * 创建短链接分组
      *
      * @param request 创建分组请求
-     * @param username 用户名
      * @return 分组响应DTO
      */
-    GroupRespDTO createGroup(GroupCreateReqDTO request, String username);
+    GroupRespDTO createGroup(GroupCreateReqDTO request);
 
     /**
      * 查询用户分组集合
      *
-     * @param username 用户名
      * @return 分组列表
      */
-    List<GroupRespDTO> getGroupsByUsername(String username);
+    List<GroupRespDTO> getGroupsByUsername();
 }

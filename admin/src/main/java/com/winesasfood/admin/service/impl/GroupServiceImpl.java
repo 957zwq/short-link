@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.winesasfood.admin.common.enums.GroupErrorCodeEnum;
 import com.winesasfood.admin.common.exception.ClientException;
+import com.winesasfood.admin.context.UserContext;
 import com.winesasfood.admin.dao.entity.GroupDO;
 import com.winesasfood.admin.dao.entity.UserDO;
 import com.winesasfood.admin.dao.mapper.GroupMapper;
@@ -29,7 +30,9 @@ public class GroupServiceImpl implements GroupService {
     private final UserMapper userMapper;
 
     @Override
-    public GroupRespDTO createGroup(GroupCreateReqDTO request, String username) {
+    public GroupRespDTO createGroup(GroupCreateReqDTO request) {
+        String username = UserContext.getUsername();
+
         // 检查用户是否存在
         LambdaQueryWrapper<UserDO> userQuery = Wrappers.lambdaQuery();
         userQuery.eq(UserDO::getUsername, username);
@@ -92,7 +95,9 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<GroupRespDTO> getGroupsByUsername(String username) {
+    public List<GroupRespDTO> getGroupsByUsername() {
+        String username = UserContext.getUsername();
+
         // 查询用户未删除的分组，按sort_order升序
         LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery();
         queryWrapper.eq(GroupDO::getUsername, username)
