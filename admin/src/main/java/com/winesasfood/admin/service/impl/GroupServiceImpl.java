@@ -12,6 +12,7 @@ import com.winesasfood.admin.dao.mapper.UserMapper;
 import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
 import com.winesasfood.admin.dto.resp.GroupRespDTO;
 import com.winesasfood.admin.service.GroupService;
+import com.winesasfood.admin.util.RandomGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -41,8 +42,17 @@ public class GroupServiceImpl implements GroupService {
             throw new ClientException(GroupErrorCodeEnum.GROUP_USER_NOT_EXIST);
         }
 
-        // 生成gid：使用用户名+时间戳后6位
-        String gid = generateGid(username);
+        // 生成gid：随机生成6位，循环直到不重复
+        String gid;
+        while (true) {
+            gid = generateGid();
+            LambdaQueryWrapper<GroupDO> gidQuery = Wrappers.lambdaQuery();
+            gidQuery.eq(GroupDO::getGid, gid);
+            GroupDO existingGid = groupMapper.selectOne(gidQuery);
+            if (existingGid == null) {
+                break;
+            }
+        }
 
         // 检查该用户下是否存在相同名称的分组
         LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery();
@@ -85,13 +95,8 @@ public class GroupServiceImpl implements GroupService {
     /**
      * 生成分组标识
      */
-    private String generateGid(String username) {
-        // 使用用户名哈希值的后8位 + 时间戳后6位
-        long timestamp = System.currentTimeMillis();
-        int hash = username.hashCode();
-        String hashPart = String.format("%08x", Math.abs(hash)).substring(0, 8);
-        String timePart = String.valueOf(timestamp).substring(String.valueOf(timestamp).length() - 6);
-        return hashPart + timePart;
+    private String generateGid() {
+        return RandomGenerator.generateRandom();
     }
 
     @Override
