@@ -10,10 +10,13 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 短链接分组管理控制器
@@ -32,6 +35,15 @@ public class GroupController {
             @Parameter(description = "登录令牌") @RequestHeader("token") String token,
             @Valid @RequestBody GroupCreateReqDTO request) {
         GroupRespDTO response = groupService.createGroup(request, username);
+        return Results.success(response);
+    }
+
+    @Operation(summary = "查询分组集合")
+    @GetMapping("/api/short-link/admin/v1/group")
+    public Result<List<GroupRespDTO>> getGroups(
+            @Parameter(description = "用户名") @RequestHeader("username") String username,
+            @Parameter(description = "登录令牌") @RequestHeader("token") String token) {
+        List<GroupRespDTO> response = groupService.getGroupsByUsername(username);
         return Results.success(response);
     }
 }

@@ -10,7 +10,7 @@ import com.winesasfood.admin.dto.req.UserUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.UserActualRespDTO;
 import com.winesasfood.admin.dto.resp.UserLoginRespDTO;
 import com.winesasfood.admin.dto.resp.UserRespDTO;
-import com.winesasfood.admin.dao.entity.User;
+import com.winesasfood.admin.dao.entity.UserDO;
 import com.winesasfood.admin.dao.mapper.UserMapper;
 import com.winesasfood.admin.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -39,9 +39,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserRespDTO getUserByUsername(String username) {
-        LambdaQueryWrapper<User> queryWrapper = Wrappers.lambdaQuery();
-        queryWrapper.eq(User::getUsername, username);
-        User user = userMapper.selectOne(queryWrapper);
+        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(UserDO::getUsername, username);
+        UserDO user = userMapper.selectOne(queryWrapper);
         if (user == null) {
             throw new ClientException("用户不存在");
         }
@@ -56,9 +56,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserActualRespDTO getActualUserByUsername(String username) {
-        LambdaQueryWrapper<User> queryWrapper = Wrappers.lambdaQuery();
-        queryWrapper.eq(User::getUsername, username);
-        User user = userMapper.selectOne(queryWrapper);
+        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(UserDO::getUsername, username);
+        UserDO user = userMapper.selectOne(queryWrapper);
         if (user == null) {
             throw new ClientException("用户不存在");
         }
@@ -82,8 +82,8 @@ public class UserServiceImpl implements UserService {
         // 布隆过滤器判断用户名是否存在（可能存在误判）
         if (userRegisterBloomFilter.contains(request.getUsername())) {
             // 布隆过滤器显示可能存在，再查数据库确认
-            LambdaQueryWrapper<User> queryWrapper = Wrappers.lambdaQuery();
-            queryWrapper.eq(User::getUsername, request.getUsername());
+            LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery();
+            queryWrapper.eq(UserDO::getUsername, request.getUsername());
             Long count = userMapper.selectCount(queryWrapper);
             if (count > 0) {
                 throw new ClientException(BaseErrorCode.USER_NAME_EXIST_ERROR);
@@ -91,15 +91,15 @@ public class UserServiceImpl implements UserService {
         }
 
         // 检查手机号是否已存在
-        LambdaQueryWrapper<User> phoneQuery = Wrappers.lambdaQuery();
-        phoneQuery.eq(User::getPhone, request.getPhone());
+        LambdaQueryWrapper<UserDO> phoneQuery = Wrappers.lambdaQuery();
+        phoneQuery.eq(UserDO::getPhone, request.getPhone());
         Long phoneCount = userMapper.selectCount(phoneQuery);
         if (phoneCount > 0) {
             throw new ClientException("手机号已被注册");
         }
 
         // 创建用户
-        User user = new User();
+        UserDO user = new UserDO();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRealName(request.getRealName());
@@ -119,18 +119,18 @@ public class UserServiceImpl implements UserService {
     @Override
     public void update(UserUpdateReqDTO request) {
         // 查询用户是否存在
-        LambdaQueryWrapper<User> queryWrapper = Wrappers.lambdaQuery();
-        queryWrapper.eq(User::getUsername, request.getUsername());
-        User user = userMapper.selectOne(queryWrapper);
+        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(UserDO::getUsername, request.getUsername());
+        UserDO user = userMapper.selectOne(queryWrapper);
         if (user == null) {
             throw new ClientException("用户不存在");
         }
 
         // 如果修改了手机号，检查新手机号是否已被其他用户使用
         if (StringUtils.hasText(request.getPhone()) && !request.getPhone().equals(user.getPhone())) {
-            LambdaQueryWrapper<User> phoneQuery = Wrappers.lambdaQuery();
-            phoneQuery.eq(User::getPhone, request.getPhone())
-                    .ne(User::getUsername, request.getUsername());
+            LambdaQueryWrapper<UserDO> phoneQuery = Wrappers.lambdaQuery();
+            phoneQuery.eq(UserDO::getPhone, request.getPhone())
+                    .ne(UserDO::getUsername, request.getUsername());
             Long phoneCount = userMapper.selectCount(phoneQuery);
             if (phoneCount > 0) {
                 throw new ClientException("手机号已被其他用户使用");
@@ -155,9 +155,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserLoginRespDTO login(UserLoginReqDTO request) {
         // 查询用户
-        LambdaQueryWrapper<User> queryWrapper = Wrappers.lambdaQuery();
-        queryWrapper.eq(User::getUsername, request.getUsername());
-        User user = userMapper.selectOne(queryWrapper);
+        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(UserDO::getUsername, request.getUsername());
+        UserDO user = userMapper.selectOne(queryWrapper);
 
         if (user == null) {
             throw new ClientException(BaseErrorCode.USER_LOGIN_NOT_EXIST);
