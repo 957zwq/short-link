@@ -1,8 +1,10 @@
 package com.winesasfood.admin.service;
 
+import com.winesasfood.admin.dto.req.UserLoginReqDTO;
 import com.winesasfood.admin.dto.req.UserRegisterReqDTO;
 import com.winesasfood.admin.dto.req.UserUpdateReqDTO;
 import com.winesasfood.admin.dto.resp.UserActualRespDTO;
+import com.winesasfood.admin.dto.resp.UserLoginRespDTO;
 import com.winesasfood.admin.dto.resp.UserRespDTO;
 
 public interface UserService {
