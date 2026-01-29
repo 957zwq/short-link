@@ -32,4 +32,11 @@ public interface GroupService {
      * @param request 修改分组请求
      */
     void updateGroup(GroupUpdateReqDTO request);
+
+    /**
+     * 删除短链接分组
+     *
+     * @param gid 分组标识
+     */
+    void deleteGroup(String gid);
 }

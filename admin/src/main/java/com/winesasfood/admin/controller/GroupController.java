@@ -11,10 +11,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -47,6 +49,13 @@ public class GroupController {
     @PutMapping("/api/short-link/admin/v1/group")
     public Result<Void> updateGroup(@Valid @RequestBody GroupUpdateReqDTO request) {
         groupService.updateGroup(request);
+        return Results.success();
+    }
+
+    @Operation(summary = "删除短链接分组")
+    @DeleteMapping("/api/short-link/admin/v1/group")
+    public Result<Void> deleteGroup(@Parameter(description = "分组标识") @RequestParam("gid") String gid) {
+        groupService.deleteGroup(gid);
         return Results.success();
     }
 }

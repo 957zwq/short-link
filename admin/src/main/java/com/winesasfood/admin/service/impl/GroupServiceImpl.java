@@ -162,4 +162,28 @@ public class GroupServiceImpl implements GroupService {
         group.setUpdateTime(new Date());
         groupMapper.updateById(group);
     }
+
+    @Override
+    public void deleteGroup(String gid) {
+        String username = UserContext.getUsername();
+
+        // 根据gid查询分组
+        LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(GroupDO::getGid, gid)
+                .eq(GroupDO::getDelFlag, 0);
+        GroupDO group = groupMapper.selectOne(queryWrapper);
+        if (group == null) {
+            throw new ClientException(GroupErrorCodeEnum.GROUP_NULL);
+        }
+
+        // 验证分组是否属于当前用户
+        if (!group.getUsername().equals(username)) {
+            throw new ClientException(GroupErrorCodeEnum.GROUP_NULL);
+        }
+
+        // 逻辑删除
+        group.setDelFlag(1);
+        group.setUpdateTime(new Date());
+        groupMapper.updateById(group);
+    }
 }
