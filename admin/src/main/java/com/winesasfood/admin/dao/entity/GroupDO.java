@@ -3,16 +3,17 @@ package com.winesasfood.admin.dao.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.winesasfood.admin.common.database.BaseDO;
 import lombok.Data;
-
-import java.util.Date;
+import lombok.EqualsAndHashCode;
 
 /**
  * 短链接分组实体
  */
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("t_group")
-public class GroupDO {
+public class GroupDO extends BaseDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -36,21 +37,4 @@ public class GroupDO {
      * 分组排序
      */
     private Integer sortOrder;
-
-    /**
-     * 创建时间
-     */
-    private Date createTime;
-
-    /**
-     * 修改时间
-     */
-    private Date updateTime;
-
-    /**
-     * 删除标识 0：未删除 1：已删除
-     */
-    private Integer delFlag;
-
-
 }

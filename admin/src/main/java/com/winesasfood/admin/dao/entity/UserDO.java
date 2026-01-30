@@ -3,13 +3,14 @@ package com.winesasfood.admin.dao.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.winesasfood.admin.common.database.BaseDO;
 import lombok.Data;
-
-import java.util.Date;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("t_user")
-public class UserDO {
+public class UserDO extends BaseDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -25,10 +26,4 @@ public class UserDO {
     private String mail;
 
     private Long deletionTime;
-
-    private Date createTime;
-
-    private Date updateTime;
-
-    private Integer delFlag;
 }
