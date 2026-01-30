@@ -46,5 +46,23 @@ CREATE TABLE `t_link` (
                           `update_time` datetime DEFAULT NULL COMMENT '修改时间',
                           `del_flag` tinyint(1) DEFAULT NULL COMMENT '删除标识 0：未删除 1：已删除',
                           PRIMARY KEY (`id`),
-                          UNIQUE KEY `idx_unique_full_short_uri` (`full_short_url`) USING BTREE
+                          UNIQUE KEY `idx_unique_full_short_url` (`full_short_url`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 短链接分表 t_link_0 ~ t_link_15（按 gid 分片）
+CREATE TABLE `t_link_0` LIKE `t_link`;
+CREATE TABLE `t_link_1` LIKE `t_link`;
+CREATE TABLE `t_link_2` LIKE `t_link`;
+CREATE TABLE `t_link_3` LIKE `t_link`;
+CREATE TABLE `t_link_4` LIKE `t_link`;
+CREATE TABLE `t_link_5` LIKE `t_link`;
+CREATE TABLE `t_link_6` LIKE `t_link`;
+CREATE TABLE `t_link_7` LIKE `t_link`;
+CREATE TABLE `t_link_8` LIKE `t_link`;
+CREATE TABLE `t_link_9` LIKE `t_link`;
+CREATE TABLE `t_link_10` LIKE `t_link`;
+CREATE TABLE `t_link_11` LIKE `t_link`;
+CREATE TABLE `t_link_12` LIKE `t_link`;
+CREATE TABLE `t_link_13` LIKE `t_link`;
+CREATE TABLE `t_link_14` LIKE `t_link`;
+CREATE TABLE `t_link_15` LIKE `t_link`;
