@@ -21,7 +21,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/short-link/admin/**")
                 .excludePathPatterns(
                         "/api/short-link/admin/v1/user/login",
-                        "/api/short-link/admin/v1/user/check-login"
+                        "/api/short-link/admin/v1/user/check-login",
+                        "/api/short-link/admin/v1/user/register",
+                        "/api/short-link/admin/v1/user/username/{username}/exists"
                 );
     }
 }

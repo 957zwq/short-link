@@ -20,6 +20,12 @@ const routes = [
     name: 'UserManage',
     component: () => import('@/views/UserManage.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/shortlinks',
+    name: 'ShortLinkManage',
+    component: () => import('@/views/ShortLinkManage.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

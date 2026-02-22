@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import java.util.stream.Collectors;
+import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
@@ -33,11 +34,19 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
+        // 参数校验：自定义有效期时必须填写有效期
+        if (requestParam.getValidDateType() != null && requestParam.getValidDateType() == 1) {
+            if (requestParam.getValidDate() == null) {
+                throw new ServiceException("自定义有效期时，有效期不能为空");
+            }
+        }
+
         String shortLinkSuffix = generateSuffix(requestParam);
         ShortLinkDO shortLinkDO = BeanUtil.toBean(requestParam, ShortLinkDO.class);
         shortLinkDO.setShortUri(shortLinkSuffix);
         shortLinkDO.setEnableStatus(0);
         shortLinkDO.setFullShortUrl(requestParam.getDomain() + "/" + shortLinkSuffix);
+
         baseMapper.insert(shortLinkDO);
         shortUriCreateCachePenetrationBloomFilter.add(shortLinkDO.getFullShortUrl());
         return ShortLinkCreateRespDTO.builder()
@@ -86,7 +95,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .originUrl(linkDO.getOriginUrl())
                         .gid(linkDO.getGid())
                         .validDateType(linkDO.getValidDateType())
-                        .validDate(linkDO.getValidDate() != null ? linkDO.getValidDate().toString() : null)
+                        .validDate(linkDO.getValidDate())
                         .describe(linkDO.getDescribe())
                         .favicon(null)  // 暂未实现
                         .build())

@@ -91,3 +91,8 @@
 .table tr:hover {
   background: #fafafa;
 }
+
+.textarea {
+  min-height: 80px;
+  resize: vertical;
+}

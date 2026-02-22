@@ -3,6 +3,7 @@
     <div class="header">
       <h1>用户中心</h1>
       <div class="user-info">
+        <router-link to="/shortlinks" class="btn btn-primary">短链接管理</router-link>
         <span>{{ currentUser.username }}</span>
         <button @click="handleLogout" class="btn btn-secondary">退出登录</button>
       </div>

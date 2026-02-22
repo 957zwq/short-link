@@ -3,7 +3,7 @@ import request from '@/utils/request'
 // 用户注册
 export const register = (data) => {
   return request({
-    url: '/shortlink/v1/user/register',
+    url: '/short-link/admin/v1/user/register',
     method: 'post',
     data
   })
@@ -37,7 +37,7 @@ export const logout = () => {
 // 查询用户
 export const getUserByUsername = (username) => {
   return request({
-    url: `/shortlink/v1/user/${username}`,
+    url: `/short-link/admin/v1/user/${username}`,
     method: 'get'
   })
 }
@@ -45,7 +45,7 @@ export const getUserByUsername = (username) => {
 // 修改用户
 export const updateUser = (data) => {
   return request({
-    url: '/shortlink/v1/user',
+    url: '/short-link/admin/v1/user',
     method: 'put',
     data
   })
@@ -54,7 +54,7 @@ export const updateUser = (data) => {
 // 检查用户名是否存在
 export const checkUsername = (username) => {
   return request({
-    url: `/shortlink/v1/user/username/${username}/exists`,
+    url: `/short-link/admin/v1/user/username/${username}/exists`,
     method: 'get'
   })
 }

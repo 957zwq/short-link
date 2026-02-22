@@ -1,4 +1,4 @@
-package com.winesasfood.project.dto.req;
+package com.winesasfood.admin.remote.dto.req;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;

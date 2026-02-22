@@ -1,21 +1,12 @@
-package com.winesasfood.project.dto.resp;
+package com.winesasfood.admin.remote.dto.resp;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
-/**
- * 短链接分页查询响应
- */
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 @Schema(description = "短链接分页查询响应")
 public class ShortLinkPageRespDTO {
 
@@ -43,6 +34,10 @@ public class ShortLinkPageRespDTO {
     @Schema(description = "有效期")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date validDate;
+
+    @Schema(description = "创建时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date createTime;
 
     @Schema(description = "描述")
     private String describe;

@@ -31,35 +31,35 @@ public class UserController {
     private final UserService userService;
 
     @Operation(summary = "根据用户名查询用户（脱敏）")
-    @GetMapping("/api/shortlink/v1/user/{username}")
+    @GetMapping("/api/short-link/admin/v1/user/{username}")
     public Result<UserRespDTO> getUserByUsername(@Parameter(description = "用户名") @PathVariable("username") String username) {
         UserRespDTO user = userService.getUserByUsername(username);
         return Results.success(user);
     }
 
     @Operation(summary = "根据用户名查询用户（未脱敏）")
-    @GetMapping("/api/shortlink/v1/actual/user/{username}")
+    @GetMapping("/api/short-link/admin/v1/actual/user/{username}")
     public Result<UserActualRespDTO> getActualUserByUsername(@Parameter(description = "用户名") @PathVariable("username") String username) {
         UserActualRespDTO user = userService.getActualUserByUsername(username);
         return Results.success(user);
     }
 
     @Operation(summary = "检查用户名是否存在")
-    @GetMapping("/api/shortlink/v1/user/username/{username}/exists")
+    @GetMapping("/api/short-link/admin/v1/user/username/{username}/exists")
     public Result<Boolean> checkUsernameExists(@Parameter(description = "用户名") @PathVariable("username") String username) {
         boolean exists = userService.isUsernameExists(username);
         return Results.success(exists);
     }
 
     @Operation(summary = "用户注册")
-    @PostMapping("/api/shortlink/v1/user/register")
+    @PostMapping("/api/short-link/admin/v1/user/register")
     public Result<Void> register(@Valid @RequestBody UserRegisterReqDTO request) {
         userService.register(request);
         return Results.success();
     }
 
     @Operation(summary = "用户修改")
-    @PutMapping("/api/shortlink/v1/user")
+    @PutMapping("/api/short-link/admin/v1/user")
     public Result<Void> update(@Valid @RequestBody UserUpdateReqDTO request) {
         userService.update(request);
         return Results.success();
