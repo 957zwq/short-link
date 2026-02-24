@@ -1,5 +1,6 @@
 package com.winesasfood.admin.remote;
 
+import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -8,6 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.winesasfood.admin.common.result.Result;
 import com.winesasfood.admin.remote.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkPageReqDTO;
+import com.winesasfood.admin.remote.dto.req.ShortLinkUpdateReqDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkCreateRespDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkPageRespDTO;
@@ -87,6 +89,25 @@ public interface ShortLinkRemoteService {
             List<ShortLinkGroupCountQueryRespDTO> data = resultJson.getJSONArray("data").toList(ShortLinkGroupCountQueryRespDTO.class);
             result.setData(data);
         }
+        return result;
+    }
+
+    /**
+     * 更新短链接
+     *
+     * @param requestParam 更新短链接请求参数
+     * @return 更新结果
+     */
+    default Result<Void> updateShortLink(ShortLinkUpdateReqDTO requestParam) {
+        String resultBodyStr = HttpRequest.put(PROJECT_HOST + "/api/short-link/v1/update")
+                .body(JSONUtil.toJsonStr(requestParam))
+                .execute()
+                .body();
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<Void> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
         return result;
     }
 }
