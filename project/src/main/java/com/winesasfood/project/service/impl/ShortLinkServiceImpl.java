@@ -7,6 +7,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.SneakyThrows;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +18,8 @@ import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
+import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
+import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.project.dto.req.ShortLinkPageReqDTO;
@@ -27,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -35,8 +42,12 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Autowired
     private RBloomFilter<String> shortUriCreateCachePenetrationBloomFilter;
 
+    @Autowired
+    private ShortLinkGotoMapper shortLinkGotoMapper;
+
     private static final int MAX_RETRY = 10;
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
         // 参数校验：自定义有效期时必须填写有效期
@@ -47,15 +58,27 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         String shortLinkSuffix = generateSuffix(requestParam);
+        String fullShortUrl = requestParam.getDomain() + "/" + shortLinkSuffix;
+
         ShortLinkDO shortLinkDO = BeanUtil.toBean(requestParam, ShortLinkDO.class);
         shortLinkDO.setShortUri(shortLinkSuffix);
         shortLinkDO.setEnableStatus(0);
-        shortLinkDO.setFullShortUrl(requestParam.getDomain() + "/" + shortLinkSuffix);
+        shortLinkDO.setFullShortUrl(fullShortUrl);
 
+        // 创建路由表数据
+        ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
+                .fullShortUrl(fullShortUrl)
+                .gid(requestParam.getGid())
+                .build();
+
+        // 插入两张表（事务保证一致性）
         baseMapper.insert(shortLinkDO);
-        shortUriCreateCachePenetrationBloomFilter.add(shortLinkDO.getFullShortUrl());
+        shortLinkGotoMapper.insert(linkGotoDO);
+
+        shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
+
         return ShortLinkCreateRespDTO.builder()
-                .fullShortUrl(shortLinkDO.getFullShortUrl())
+                .fullShortUrl(requestParam.getDomainProtocol() + fullShortUrl)
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
@@ -165,5 +188,48 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         baseMapper.updateById(shortLinkDO);
+    }
+
+    @SneakyThrows
+    public void restoreUrl(String shortUri, ServletRequest request, ServletResponse response) {
+        // 构建完整短链接（不带协议）
+        String serverName = request.getServerName();
+        String fullShortUrl = serverName + "/" + shortUri;
+
+        // 1. 查询 goto 表获取 gid（按 full_short_url 分片）
+        LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
+                .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
+        ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
+
+        if (shortLinkGotoDO == null) {
+            // 短链接不存在，返回 404
+            ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
+            return;
+        }
+
+        // 2. 查询短链接表获取原始链接（按 gid 分片）
+        LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
+                .eq(ShortLinkDO::getGid, shortLinkGotoDO.getGid())
+                .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
+                .eq(ShortLinkDO::getDelFlag, 0)
+                .eq(ShortLinkDO::getEnableStatus, 0);
+        ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
+
+        if (shortLinkDO == null) {
+            // 短链接已失效或不存在
+            ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接已失效");
+            return;
+        }
+
+        // 3. 检查有效期
+        if (shortLinkDO.getValidDateType() != null && VailDateTypeEnum.isCustom(shortLinkDO.getValidDateType())) {
+            if (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new java.util.Date())) {
+                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_GONE, "短链接已过期");
+                return;
+            }
+        }
+
+        // 4. 302 跳转到原始链接
+        ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
     }
 }
