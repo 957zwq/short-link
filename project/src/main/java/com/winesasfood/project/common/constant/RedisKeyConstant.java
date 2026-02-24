@@ -12,6 +12,12 @@ public class RedisKeyConstant {
     public static final String GOTO_SHORT_LINK_KEY = "short:link:goto:%s";
 
     /**
+     * 短链接跳转路由空值缓存 Key（布隆过滤器误判后使用）
+     * %s: fullShortUrl（完整短链接）
+     */
+    public static final String GOTO_IS_NULL_SHORT_LINK_KEY = "short:link:is-null:goto:%s";
+
+    /**
      * 短链接跳转路由分布式锁 Key
      * %s: fullShortUrl（完整短链接）
      */
@@ -30,6 +36,16 @@ public class RedisKeyConstant {
      */
     public static String getGotoShortLinkKey(String fullShortUrl) {
         return String.format(GOTO_SHORT_LINK_KEY, fullShortUrl);
+    }
+
+    /**
+     * 获取短链接跳转路由空值缓存 Key
+     *
+     * @param fullShortUrl 完整短链接
+     * @return Redis Key
+     */
+    public static String getGotoIsNullShortLinkKey(String fullShortUrl) {
+        return String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl);
     }
 
     /**

@@ -218,9 +218,10 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String serverName = request.getServerName();
         String fullShortUrl = serverName + "/" + shortUri;
 
-        // 1. 布隆过滤器检查 - 防止缓存击穿（不存在的短链接直接返回）
+        // 1. 布隆过滤器检查 - 防止缓存穿透（不存在的短链接直接返回）
         if (!shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl)) {
-            log.warn("[缓存击穿防护] 布隆过滤器拦截不存在的短链接: {}", fullShortUrl);
+            log.warn("[缓存穿透防护] 布隆过滤器确认不存在: {}", fullShortUrl);
+            // 布隆过滤器说"不存在"就是一定不存在，直接返回404
             ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
             return;
         }
@@ -232,13 +233,17 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (StrUtil.isNotBlank(cachedGid)) {
             // 缓存命中，直接获取 gid
             log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
-            // 空值缓存（防止缓存击穿）
-            if ("null".equals(cachedGid)) {
-                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
-                return;
-            }
             // 查询短链接表并跳转
             redirectToOriginUrl(cachedGid, fullShortUrl, response);
+            return;
+        }
+
+        // 检查布隆过滤器误判缓存
+        String nullCacheKey = RedisKeyConstant.getGotoIsNullShortLinkKey(fullShortUrl);
+        String nullCache = stringRedisTemplate.opsForValue().get(nullCacheKey);
+        if (StrUtil.isNotBlank(nullCache)) {
+            log.debug("[布隆过滤器误判缓存命中] shortUrl: {}", fullShortUrl);
+            ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
             return;
         }
 
@@ -272,9 +277,11 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
 
             if (shortLinkGotoDO == null) {
-                // 短链接不存在，写入空值缓存（防止缓存击穿）
-                log.warn("[数据库未命中] shortUrl: {}, 写入空值缓存", fullShortUrl);
-                stringRedisTemplate.opsForValue().set(redisKey, "null", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
+                // 布隆过滤器误判：说存在但实际不存在
+                log.warn("[布隆过滤器误判] 实际不存在，写入空值缓存: {}", fullShortUrl);
+                // 写入空值缓存，防止下次误判再次查数据库
+                String nullCacheKey = RedisKeyConstant.getGotoIsNullShortLinkKey(fullShortUrl);
+                stringRedisTemplate.opsForValue().set(nullCacheKey, "1", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
                 ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
                 return;
             }
