@@ -10,9 +10,6 @@ import java.util.Date;
 @Schema(description = "短链接创建请求")
 public class ShortLinkCreateReqDTO {
 
-    @Schema(description = "协议")
-    private String domainProtocol;
-
     @Schema(description = "域名")
     private String domain;
 
