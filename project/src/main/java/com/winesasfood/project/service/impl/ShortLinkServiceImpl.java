@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.winesasfood.project.common.constant.RedisKeyConstant;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -58,8 +59,6 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     private static final int MAX_RETRY = 10;
 
-    // Redis Key 前缀
-    private static final String GOTO_SHORT_LINK_KEY = "short:link:goto:";
     // 空值缓存过期时间（分钟）
     private static final long NULL_CACHE_EXPIRE = 5;
     // 正常缓存过期时间（分钟）
@@ -227,7 +226,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         // 2. 查询 Redis 缓存
-        String redisKey = GOTO_SHORT_LINK_KEY + fullShortUrl;
+        String redisKey = RedisKeyConstant.getGotoShortLinkKey(fullShortUrl);
         String cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
 
         if (StrUtil.isNotBlank(cachedGid)) {
@@ -244,7 +243,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         // 3. 缓存未命中，使用分布式锁防止缓存击穿
-        String lockKey = "lock:goto:" + fullShortUrl;
+        String lockKey = RedisKeyConstant.getLockGotoShortLinkKey(fullShortUrl);
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
