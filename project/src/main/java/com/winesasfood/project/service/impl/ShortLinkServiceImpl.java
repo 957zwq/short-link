@@ -234,20 +234,20 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String redisKey = RedisKeyConstant.getGotoShortLinkKey(fullShortUrl);
         String cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
 
-        if (StrUtil.isNotBlank(cachedGid)) {
-            // 缓存命中，直接获取 gid
-            log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
-            // 查询短链接表并跳转
-            redirectToOriginUrl(cachedGid, fullShortUrl, response);
-            return;
-        }
-
         // 检查布隆过滤器误判缓存
         String nullCacheKey = RedisKeyConstant.getGotoIsNullShortLinkKey(fullShortUrl);
         String nullCache = stringRedisTemplate.opsForValue().get(nullCacheKey);
         if (StrUtil.isNotBlank(nullCache)) {
             log.debug("[布隆过滤器误判缓存命中] shortUrl: {}", fullShortUrl);
             ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
+            return;
+        }
+
+        if (StrUtil.isNotBlank(cachedGid)) {
+            // 缓存命中，直接获取 gid
+            log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
+            // 查询短链接表并跳转
+            redirectToOriginUrl(cachedGid, fullShortUrl, response, nullCacheKey);
             return;
         }
 
@@ -271,7 +271,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
                     return;
                 }
-                redirectToOriginUrl(cachedGid, fullShortUrl, response);
+                redirectToOriginUrl(cachedGid, fullShortUrl, response, nullCacheKey);
                 return;
             }
 
@@ -295,7 +295,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             log.debug("[缓存写入] shortUrl: {}, gid: {}", fullShortUrl, gid);
 
             // 5. 查询短链接表并跳转
-            redirectToOriginUrl(gid, fullShortUrl, response);
+            redirectToOriginUrl(gid, fullShortUrl, response, nullCacheKey);
 
         } finally {
             // 释放锁
@@ -309,7 +309,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
      * 查询短链接表并重定向到原始链接
      */
     @SneakyThrows
-    private void redirectToOriginUrl(String gid, String fullShortUrl, ServletResponse response) {
+    private void redirectToOriginUrl(String gid, String fullShortUrl, ServletResponse response, String nullCacheKey) {
         LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
                 .eq(ShortLinkDO::getGid, gid)
                 .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
@@ -326,6 +326,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         // 检查有效期
         if (shortLinkDO.getValidDateType() != null && VailDateTypeEnum.isCustom(shortLinkDO.getValidDateType())) {
             if (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new java.util.Date())) {
+                // 短链接已过期，写入空值缓存，避免下次再次查询数据库
+                log.warn("[短链接过期] 写入空值缓存: {}", fullShortUrl);
+                stringRedisTemplate.opsForValue().set(nullCacheKey, "1", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
                 ((HttpServletResponse) response).sendError(HttpServletResponse.SC_GONE, "短链接已过期");
                 return;
             }
