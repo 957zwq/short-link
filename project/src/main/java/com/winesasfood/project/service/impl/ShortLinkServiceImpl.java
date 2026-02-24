@@ -116,11 +116,11 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             queryWrapper.eq(ShortLinkDO::getGid, gid)
                     .eq(ShortLinkDO::getDelFlag, 0)
                     .eq(ShortLinkDO::getEnableStatus, 0);
-            int count = baseMapper.selectCount(queryWrapper);
+            Long count = baseMapper.selectCount(queryWrapper);
             
             ShortLinkGroupCountQueryRespDTO dto = new ShortLinkGroupCountQueryRespDTO();
             dto.setGid(gid);
-            dto.setShortLinkCount(count);
+            dto.setShortLinkCount(count.intValue());
             resultList.add(dto);
         }
         
