@@ -3,6 +3,7 @@ package com.winesasfood.project.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -14,6 +15,7 @@ import lombok.SneakyThrows;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
@@ -31,7 +33,10 @@ import com.winesasfood.project.service.ShortLinkService;
 import com.winesasfood.project.toolkit.HashUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,7 +50,24 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Autowired
     private ShortLinkGotoMapper shortLinkGotoMapper;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private RedissonClient redissonClient;
+
     private static final int MAX_RETRY = 10;
+
+    // Redis Key 前缀
+    private static final String GOTO_SHORT_LINK_KEY = "short:link:goto:";
+    // 空值缓存过期时间（分钟）
+    private static final long NULL_CACHE_EXPIRE = 5;
+    // 正常缓存过期时间（分钟）
+    private static final long CACHE_EXPIRE = 30;
+    // 分布式锁超时时间（秒）
+    private static final long LOCK_WAIT_TIME = 10;
+    // 分布式锁自动释放时间（秒）
+    private static final long LOCK_LEASE_TIME = 5;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -197,20 +219,90 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String serverName = request.getServerName();
         String fullShortUrl = serverName + "/" + shortUri;
 
-        // 1. 查询 goto 表获取 gid（按 full_short_url 分片）
-        LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
-                .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
-        ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
-
-        if (shortLinkGotoDO == null) {
-            // 短链接不存在，返回 404
+        // 1. 布隆过滤器检查 - 防止缓存击穿（不存在的短链接直接返回）
+        if (!shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl)) {
+            log.warn("[缓存击穿防护] 布隆过滤器拦截不存在的短链接: {}", fullShortUrl);
             ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
             return;
         }
 
-        // 2. 查询短链接表获取原始链接（按 gid 分片）
+        // 2. 查询 Redis 缓存
+        String redisKey = GOTO_SHORT_LINK_KEY + fullShortUrl;
+        String cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
+
+        if (StrUtil.isNotBlank(cachedGid)) {
+            // 缓存命中，直接获取 gid
+            log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
+            // 空值缓存（防止缓存击穿）
+            if ("null".equals(cachedGid)) {
+                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
+                return;
+            }
+            // 查询短链接表并跳转
+            redirectToOriginUrl(cachedGid, fullShortUrl, response);
+            return;
+        }
+
+        // 3. 缓存未命中，使用分布式锁防止缓存击穿
+        String lockKey = "lock:goto:" + fullShortUrl;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            // 尝试获取锁
+            boolean isLocked = lock.tryLock(LOCK_WAIT_TIME, LOCK_LEASE_TIME, TimeUnit.SECONDS);
+            if (!isLocked) {
+                log.warn("[获取锁失败] shortUrl: {}", fullShortUrl);
+                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "系统繁忙，请稍后重试");
+                return;
+            }
+
+            // 双重检查 - 获取锁后再次检查缓存
+            cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
+            if (StrUtil.isNotBlank(cachedGid)) {
+                if ("null".equals(cachedGid)) {
+                    ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
+                    return;
+                }
+                redirectToOriginUrl(cachedGid, fullShortUrl, response);
+                return;
+            }
+
+            // 4. 查询数据库（goto 表）
+            LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
+                    .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
+            ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
+
+            if (shortLinkGotoDO == null) {
+                // 短链接不存在，写入空值缓存（防止缓存击穿）
+                log.warn("[数据库未命中] shortUrl: {}, 写入空值缓存", fullShortUrl);
+                stringRedisTemplate.opsForValue().set(redisKey, "null", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
+                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
+                return;
+            }
+
+            // 写入 Redis 缓存
+            String gid = shortLinkGotoDO.getGid();
+            stringRedisTemplate.opsForValue().set(redisKey, gid, CACHE_EXPIRE, TimeUnit.MINUTES);
+            log.debug("[缓存写入] shortUrl: {}, gid: {}", fullShortUrl, gid);
+
+            // 5. 查询短链接表并跳转
+            redirectToOriginUrl(gid, fullShortUrl, response);
+
+        } finally {
+            // 释放锁
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 查询短链接表并重定向到原始链接
+     */
+    @SneakyThrows
+    private void redirectToOriginUrl(String gid, String fullShortUrl, ServletResponse response) {
         LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
-                .eq(ShortLinkDO::getGid, shortLinkGotoDO.getGid())
+                .eq(ShortLinkDO::getGid, gid)
                 .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
                 .eq(ShortLinkDO::getDelFlag, 0)
                 .eq(ShortLinkDO::getEnableStatus, 0);
@@ -222,7 +314,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             return;
         }
 
-        // 3. 检查有效期
+        // 检查有效期
         if (shortLinkDO.getValidDateType() != null && VailDateTypeEnum.isCustom(shortLinkDO.getValidDateType())) {
             if (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new java.util.Date())) {
                 ((HttpServletResponse) response).sendError(HttpServletResponse.SC_GONE, "短链接已过期");
@@ -230,7 +322,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         }
 
-        // 4. 302 跳转到原始链接
+        // 302 跳转到原始链接
         ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
     }
 }
