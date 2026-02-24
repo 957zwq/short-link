@@ -1,4 +1,4 @@
-package com.winesasfood.admin.remote.dto;
+package com.winesasfood.admin.remote;
 
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
@@ -9,9 +9,11 @@ import com.winesasfood.admin.common.result.Result;
 import com.winesasfood.admin.remote.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkPageReqDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkCreateRespDTO;
+import com.winesasfood.admin.remote.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkPageRespDTO;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -63,6 +65,27 @@ public interface ShortLinkRemoteService {
             Page<ShortLinkPageRespDTO> page = new Page<>(data.getLong("current"), data.getLong("size"), data.getLong("total"));
             page.setRecords(data.getJSONArray("records").toList(ShortLinkPageRespDTO.class));
             result.setData(page);
+        }
+        return result;
+    }
+
+    /**
+     * 查询分组短链接数量
+     *
+     * @param requestParam 分组标识列表
+     * @return 分组短链接数量列表
+     */
+    default Result<List<ShortLinkGroupCountQueryRespDTO>> listGroupShortLinkCount(List<String> requestParam) {
+        String resultBodyStr = HttpUtil.get(PROJECT_HOST + "/api/short-link/v1/count", 
+                cn.hutool.core.map.MapUtil.of("requestParam", cn.hutool.core.collection.CollUtil.join(requestParam, ",")));
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<List<ShortLinkGroupCountQueryRespDTO>> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        if (resultJson.getJSONArray("data") != null) {
+            List<ShortLinkGroupCountQueryRespDTO> data = resultJson.getJSONArray("data").toList(ShortLinkGroupCountQueryRespDTO.class);
+            result.setData(data);
         }
         return result;
     }

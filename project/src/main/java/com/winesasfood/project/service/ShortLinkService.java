@@ -6,7 +6,10 @@ import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.project.dto.req.ShortLinkPageReqDTO;
 import com.winesasfood.project.dto.resp.ShortLinkCreateRespDTO;
+import com.winesasfood.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkPageRespDTO;
+
+import java.util.List;
 
 public interface ShortLinkService extends IService<ShortLinkDO> {
 
@@ -25,4 +28,12 @@ public interface ShortLinkService extends IService<ShortLinkDO> {
      * @return 分页结果
      */
     Page<ShortLinkPageRespDTO> pageShortLink(ShortLinkPageReqDTO requestParam);
+
+    /**
+     * 查询分组短链接数量
+     *
+     * @param requestParam 分组标识列表
+     * @return 分组短链接数量列表
+     */
+    List<ShortLinkGroupCountQueryRespDTO> listGroupShortLinkCount(List<String> requestParam);
 }

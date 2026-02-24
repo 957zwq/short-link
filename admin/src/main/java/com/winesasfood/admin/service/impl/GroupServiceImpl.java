@@ -81,16 +81,15 @@ public class GroupServiceImpl implements GroupService {
             throw new ClientException(GroupErrorCodeEnum.GROUP_SAVE_ERROR);
         }
 
-        // 构造返回DTO
+        // 构造返回 DTO
         GroupRespDTO respDTO = new GroupRespDTO();
         respDTO.setId(group.getId());
         respDTO.setGid(group.getGid());
         respDTO.setName(group.getName());
-        respDTO.setUsername(group.getUsername());
         respDTO.setSortOrder(group.getSortOrder());
         respDTO.setCreateTime(group.getCreateTime());
         respDTO.setUpdateTime(group.getUpdateTime());
-
+        
         return respDTO;
     }
 
@@ -112,20 +111,19 @@ public class GroupServiceImpl implements GroupService {
                 .orderByAsc(GroupDO::getSortOrder);
         List<GroupDO> groupList = groupMapper.selectList(queryWrapper);
 
-        // 转换为DTO
+        // 转换为 DTO
         List<GroupRespDTO> resultList = new ArrayList<>();
         for (GroupDO group : groupList) {
             GroupRespDTO respDTO = new GroupRespDTO();
             respDTO.setId(group.getId());
             respDTO.setGid(group.getGid());
             respDTO.setName(group.getName());
-            respDTO.setUsername(group.getUsername());
             respDTO.setSortOrder(group.getSortOrder());
             respDTO.setCreateTime(group.getCreateTime());
             respDTO.setUpdateTime(group.getUpdateTime());
             resultList.add(respDTO);
         }
-
+        
         return resultList;
     }
 

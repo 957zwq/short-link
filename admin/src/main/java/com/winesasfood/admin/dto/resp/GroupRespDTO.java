@@ -10,7 +10,7 @@ import java.util.Date;
 @Schema(description = "短链接分组响应")
 public class GroupRespDTO {
 
-    @Schema(description = "主键ID")
+    @Schema(description = "主键 ID")
     private Long id;
 
     @Schema(description = "分组标识")
@@ -18,9 +18,6 @@ public class GroupRespDTO {
 
     @Schema(description = "分组名称")
     private String name;
-
-    @Schema(description = "创建分组用户名")
-    private String username;
 
     @Schema(description = "分组排序")
     private Integer sortOrder;
@@ -32,4 +29,6 @@ public class GroupRespDTO {
     @Schema(description = "修改时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updateTime;
+
+    private Integer shortLinkCount;
 }

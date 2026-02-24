@@ -8,6 +8,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
@@ -15,6 +17,7 @@ import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.project.dto.req.ShortLinkPageReqDTO;
 import com.winesasfood.project.dto.resp.ShortLinkCreateRespDTO;
+import com.winesasfood.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkPageRespDTO;
 import com.winesasfood.project.service.ShortLinkService;
 import com.winesasfood.project.toolkit.HashUtil;
@@ -102,5 +105,25 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .collect(Collectors.toList()));
 
         return resultPage;
+    }
+
+    @Override
+    public List<ShortLinkGroupCountQueryRespDTO> listGroupShortLinkCount(List<String> requestParam) {
+        List<ShortLinkGroupCountQueryRespDTO> resultList = new ArrayList<>();
+        
+        for (String gid : requestParam) {
+            LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery();
+            queryWrapper.eq(ShortLinkDO::getGid, gid)
+                    .eq(ShortLinkDO::getDelFlag, 0)
+                    .eq(ShortLinkDO::getEnableStatus, 0);
+            int count = baseMapper.selectCount(queryWrapper);
+            
+            ShortLinkGroupCountQueryRespDTO dto = new ShortLinkGroupCountQueryRespDTO();
+            dto.setGid(gid);
+            dto.setShortLinkCount(count);
+            resultList.add(dto);
+        }
+        
+        return resultList;
     }
 }
