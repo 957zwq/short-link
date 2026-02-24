@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.winesasfood.admin.common.errorcode.BaseErrorCode;
 import com.winesasfood.admin.common.exception.ClientException;
+import com.winesasfood.admin.dto.req.GroupCreateReqDTO;
 import com.winesasfood.admin.dto.req.UserLoginReqDTO;
 import com.winesasfood.admin.dto.req.UserRegisterReqDTO;
 import com.winesasfood.admin.dto.req.UserUpdateReqDTO;
@@ -12,6 +13,7 @@ import com.winesasfood.admin.dto.resp.UserLoginRespDTO;
 import com.winesasfood.admin.dto.resp.UserRespDTO;
 import com.winesasfood.admin.dao.entity.UserDO;
 import com.winesasfood.admin.dao.mapper.UserMapper;
+import com.winesasfood.admin.service.GroupService;
 import com.winesasfood.admin.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RBloomFilter;
@@ -31,8 +33,10 @@ public class UserServiceImpl implements UserService {
 
     private static final String LOGIN_TOKEN_KEY_PREFIX = "short-link:user:login:token:";
     private static final long TOKEN_EXPIRE_DAYS = 7;
+    private static final String DEFAULT_GROUP_NAME = "默认分组";
 
     private final UserMapper userMapper;
+    private final GroupService groupService;
     private final RBloomFilter<String> userRegisterBloomFilter;
     private final RedissonClient redissonClient;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -113,6 +117,23 @@ public class UserServiceImpl implements UserService {
         if (inserted > 0) {
             // 注册成功，将用户名加入布隆过滤器
             userRegisterBloomFilter.add(request.getUsername());
+            
+            // 创建默认分组
+            createDefaultGroup(request.getUsername());
+        }
+    }
+
+    /**
+     * 创建默认分组
+     */
+    private void createDefaultGroup(String username) {
+        try {
+            GroupCreateReqDTO groupCreateReqDTO = new GroupCreateReqDTO();
+            groupCreateReqDTO.setName(DEFAULT_GROUP_NAME);
+            groupService.createGroup(groupCreateReqDTO);
+        } catch (Exception e) {
+            // 记录日志但不影响注册流程
+            System.err.println("创建默认分组失败，用户名: " + username + ", 错误: " + e.getMessage());
         }
     }
 
