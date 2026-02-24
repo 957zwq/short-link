@@ -5,6 +5,7 @@ import com.winesasfood.project.common.convention.result.Result;
 import com.winesasfood.project.common.convention.result.Results;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.project.dto.req.ShortLinkPageReqDTO;
+import com.winesasfood.project.dto.req.ShortLinkUpdateReqDTO;
 import com.winesasfood.project.dto.resp.ShortLinkCreateRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkPageRespDTO;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -52,6 +54,16 @@ public class ShortLinkController {
     @GetMapping("/api/short-link/v1/count")
     public Result<List<ShortLinkGroupCountQueryRespDTO>> listGroupShortLinkCount(@RequestParam("requestParam") List<String> requestParam) {
         return Results.success(shortLinkService.listGroupShortLinkCount(requestParam));
+    }
+
+    /**
+     * 更新短链接
+     */
+    @Operation(summary = "更新短链接", description = "更新短链接信息")
+    @PutMapping("/api/short-link/v1/update")
+    public Result<Void> updateShortLink(@RequestBody ShortLinkUpdateReqDTO requestParam) {
+        shortLinkService.updateShortLink(requestParam);
+        return Results.success();
     }
 
 }

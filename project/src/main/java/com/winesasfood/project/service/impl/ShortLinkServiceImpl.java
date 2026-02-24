@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
+import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.project.dto.req.ShortLinkPageReqDTO;
+import com.winesasfood.project.dto.req.ShortLinkUpdateReqDTO;
 import com.winesasfood.project.dto.resp.ShortLinkCreateRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.project.dto.resp.ShortLinkPageRespDTO;
@@ -38,7 +40,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
         // 参数校验：自定义有效期时必须填写有效期
-        if (requestParam.getValidDateType() != null && requestParam.getValidDateType() == 1) {
+        if (requestParam.getValidDateType() != null && VailDateTypeEnum.isCustom(requestParam.getValidDateType())) {
             if (requestParam.getValidDate() == null) {
                 throw new ServiceException("自定义有效期时，有效期不能为空");
             }
@@ -125,5 +127,43 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
         
         return resultList;
+    }
+
+    @Override
+    public void updateShortLink(ShortLinkUpdateReqDTO requestParam) {
+        // 根据完整短链接查询
+        LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(ShortLinkDO::getFullShortUrl, requestParam.getFullShortUrl())
+                .eq(ShortLinkDO::getDelFlag, 0);
+        ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
+        if (shortLinkDO == null) {
+            throw new ServiceException("短链接不存在");
+        }
+
+        // 参数校验：自定义有效期时必须填写有效期
+        if (requestParam.getValidDateType() != null && VailDateTypeEnum.isCustom(requestParam.getValidDateType())) {
+            if (requestParam.getValidDate() == null) {
+                throw new ServiceException("自定义有效期时，有效期不能为空");
+            }
+        }
+
+        // 更新字段
+        if (requestParam.getOriginUrl() != null) {
+            shortLinkDO.setOriginUrl(requestParam.getOriginUrl());
+        }
+        if (requestParam.getGid() != null) {
+            shortLinkDO.setGid(requestParam.getGid());
+        }
+        if (requestParam.getValidDateType() != null) {
+            shortLinkDO.setValidDateType(requestParam.getValidDateType());
+        }
+        if (requestParam.getValidDate() != null) {
+            shortLinkDO.setValidDate(requestParam.getValidDate());
+        }
+        if (requestParam.getDescribe() != null) {
+            shortLinkDO.setDescribe(requestParam.getDescribe());
+        }
+
+        baseMapper.updateById(shortLinkDO);
     }
 }
