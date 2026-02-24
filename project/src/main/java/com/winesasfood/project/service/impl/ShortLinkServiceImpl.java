@@ -96,7 +96,11 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         baseMapper.insert(shortLinkDO);
         shortLinkGotoMapper.insert(linkGotoDO);
 
+        // 缓存预热：写入 Redis 缓存和布隆过滤器
         shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
+        String redisKey = RedisKeyConstant.getGotoShortLinkKey(fullShortUrl);
+        stringRedisTemplate.opsForValue().set(redisKey, requestParam.getGid(), CACHE_EXPIRE, TimeUnit.MINUTES);
+        log.info("[缓存预热] 短链接创建成功，已写入缓存: {}", fullShortUrl);
 
         return ShortLinkCreateRespDTO.builder()
                 .fullShortUrl("http://" + fullShortUrl)
@@ -280,7 +284,6 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 // 布隆过滤器误判：说存在但实际不存在
                 log.warn("[布隆过滤器误判] 实际不存在，写入空值缓存: {}", fullShortUrl);
                 // 写入空值缓存，防止下次误判再次查数据库
-                String nullCacheKey = RedisKeyConstant.getGotoIsNullShortLinkKey(fullShortUrl);
                 stringRedisTemplate.opsForValue().set(nullCacheKey, "1", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
                 ((HttpServletResponse) response).sendError(HttpServletResponse.SC_NOT_FOUND, "短链接不存在");
                 return;
