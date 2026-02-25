@@ -7,6 +7,10 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.winesasfood.admin.common.result.Result;
+import com.winesasfood.admin.remote.dto.req.RecycleBinPageReqDTO;
+import com.winesasfood.admin.remote.dto.req.RecycleBinRecoverReqDTO;
+import com.winesasfood.admin.remote.dto.req.RecycleBinRemoveReqDTO;
+import com.winesasfood.admin.remote.dto.req.RecycleBinSaveReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkPageReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkUpdateReqDTO;
@@ -103,6 +107,80 @@ public interface ShortLinkRemoteService {
                 .body(JSONUtil.toJsonStr(requestParam))
                 .execute()
                 .body();
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<Void> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        return result;
+    }
+
+    /**
+     * 保存到回收站
+     *
+     * @param requestParam 保存请求参数
+     * @return 保存结果
+     */
+    default Result<Void> saveRecycleBin(RecycleBinSaveReqDTO requestParam) {
+        String resultBodyStr = HttpUtil.post(PROJECT_HOST + "/api/short-link/v1/recycle-bin/save", JSONUtil.toJsonStr(requestParam));
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<Void> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        return result;
+    }
+
+    /**
+     * 分页查询回收站短链接
+     *
+     * @param requestParam 分页请求参数
+     * @return 分页结果
+     */
+    default Result<IPage<ShortLinkPageRespDTO>> pageRecycleBin(RecycleBinPageReqDTO requestParam) {
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("gid", requestParam.getGid());
+        requestMap.put("current", requestParam.getCurrent());
+        requestMap.put("size", requestParam.getSize());
+        String resultPageStr = HttpUtil.get(PROJECT_HOST + "/api/short-link/v1/recycle-bin/page", requestMap);
+        JSONObject resultJson = JSONUtil.parseObj(resultPageStr);
+        Result<IPage<ShortLinkPageRespDTO>> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        if (resultJson.getJSONObject("data") != null) {
+            JSONObject data = resultJson.getJSONObject("data");
+            Page<ShortLinkPageRespDTO> page = new Page<>(data.getLong("current"), data.getLong("size"), data.getLong("total"));
+            page.setRecords(data.getJSONArray("records").toList(ShortLinkPageRespDTO.class));
+            result.setData(page);
+        }
+        return result;
+    }
+
+    /**
+     * 恢复短链接
+     *
+     * @param requestParam 恢复请求参数
+     * @return 恢复结果
+     */
+    default Result<Void> recoverRecycleBin(RecycleBinRecoverReqDTO requestParam) {
+        String resultBodyStr = HttpUtil.post(PROJECT_HOST + "/api/short-link/v1/recycle-bin/recover", JSONUtil.toJsonStr(requestParam));
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<Void> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        return result;
+    }
+
+    /**
+     * 移除短链接
+     *
+     * @param requestParam 移除请求参数
+     * @return 移除结果
+     */
+    default Result<Void> removeRecycleBin(RecycleBinRemoveReqDTO requestParam) {
+        String resultBodyStr = HttpUtil.post(PROJECT_HOST + "/api/short-link/v1/recycle-bin/remove", JSONUtil.toJsonStr(requestParam));
         JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
         Result<Void> result = new Result<>();
         result.setCode(resultJson.getStr("code"));
