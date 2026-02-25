@@ -11,6 +11,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.winesasfood.project.common.constant.RedisKeyConstant;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
@@ -336,5 +337,126 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
         // 302 跳转到原始链接
         ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
+    }
+
+    /**
+     * 尝试短链接跳转
+     */
+    public boolean tryRedirect(String shortUri, HttpServletRequest request, HttpServletResponse response) {
+        try {
+            // 构建完整短链接（不带协议）
+            String serverName = request.getServerName();
+            String fullShortUrl = serverName + "/s/" + shortUri;
+
+            // 1. 布隆过滤器检查 - 防止缓存穿透
+            if (!shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl)) {
+                log.warn("[缓存穿透防护] 布隆过滤器确认不存在: {}", fullShortUrl);
+                return false;
+            }
+
+            // 2. 查询 Redis 缓存
+            String redisKey = RedisKeyConstant.getGotoShortLinkKey(fullShortUrl);
+            String cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
+
+            // 检查布隆过滤器误判缓存
+            String nullCacheKey = RedisKeyConstant.getGotoIsNullShortLinkKey(fullShortUrl);
+            String nullCache = stringRedisTemplate.opsForValue().get(nullCacheKey);
+            if (StrUtil.isNotBlank(nullCache)) {
+                log.debug("[布隆过滤器误判缓存命中] shortUrl: {}", fullShortUrl);
+                return false;
+            }
+
+            if (StrUtil.isNotBlank(cachedGid)) {
+                // 缓存命中，直接获取 gid
+                log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
+                return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, response, nullCacheKey);
+            }
+
+            // 3. 缓存未命中，使用分布式锁防止缓存击穿
+            String lockKey = RedisKeyConstant.getLockGotoShortLinkKey(fullShortUrl);
+            RLock lock = redissonClient.getLock(lockKey);
+
+            try {
+                // 尝试获取锁
+                boolean isLocked = lock.tryLock(LOCK_WAIT_TIME, LOCK_LEASE_TIME, TimeUnit.SECONDS);
+                if (!isLocked) {
+                    log.warn("[获取锁失败] shortUrl: {}", fullShortUrl);
+                    response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "系统繁忙，请稍后重试");
+                    return true; // 已处理响应
+                }
+
+                // 双重检查 - 获取锁后再次检查缓存
+                cachedGid = stringRedisTemplate.opsForValue().get(redisKey);
+                if (StrUtil.isNotBlank(cachedGid)) {
+                    if ("null".equals(cachedGid)) {
+                        return false;
+                    }
+                    return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, response, nullCacheKey);
+                }
+
+                // 4. 查询数据库（goto 表）
+                LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
+                        .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
+                ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
+
+                if (shortLinkGotoDO == null) {
+                    // 布隆过滤器误判：说存在但实际不存在
+                    log.warn("[布隆过滤器误判] 实际不存在，写入空值缓存: {}", fullShortUrl);
+                    // 写入空值缓存，防止下次误判再次查数据库
+                    stringRedisTemplate.opsForValue().set(nullCacheKey, "1", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
+                    return false;
+                }
+
+                // 写入 Redis 缓存
+                String gid = shortLinkGotoDO.getGid();
+                stringRedisTemplate.opsForValue().set(redisKey, gid, CACHE_EXPIRE, TimeUnit.MINUTES);
+                log.debug("[缓存写入] shortUrl: {}, gid: {}", fullShortUrl, gid);
+
+                // 5. 查询短链接表并跳转
+                return redirectToOriginUrlWithResult(gid, fullShortUrl, response, nullCacheKey);
+
+            } finally {
+                // 释放锁
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
+            }
+        } catch (Exception e) {
+            log.error("[短链接跳转异常] shortUri: {}", shortUri, e);
+            return false;
+        }
+    }
+
+    /**
+     * 查询短链接表并重定向到原始链接（返回结果版本）
+     * @return true-跳转成功, false-跳转失败
+     */
+    @SneakyThrows
+    private boolean redirectToOriginUrlWithResult(String gid, String fullShortUrl, HttpServletResponse response, String nullCacheKey) {
+        LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
+                .eq(ShortLinkDO::getGid, gid)
+                .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
+                .eq(ShortLinkDO::getDelFlag, 0)
+                .eq(ShortLinkDO::getEnableStatus, 0);
+        ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
+
+        if (shortLinkDO == null) {
+            // 短链接已失效或不存在
+            return false;
+        }
+
+        // 检查有效期
+        if (shortLinkDO.getValidDateType() != null && VailDateTypeEnum.isCustom(shortLinkDO.getValidDateType())) {
+            if (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new java.util.Date())) {
+                // 短链接已过期，写入空值缓存，避免下次再次查询数据库
+                log.warn("[短链接过期] 写入空值缓存: {}", fullShortUrl);
+                stringRedisTemplate.opsForValue().set(nullCacheKey, "1", NULL_CACHE_EXPIRE, TimeUnit.MINUTES);
+                return false;
+            }
+        }
+
+        // 302 跳转到原始链接
+        response.sendRedirect(shortLinkDO.getOriginUrl());
+        return true;
     }
 }

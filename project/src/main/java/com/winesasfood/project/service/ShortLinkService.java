@@ -55,4 +55,16 @@ public interface ShortLinkService extends IService<ShortLinkDO> {
      * @param response ServletResponse
      */
     void restoreUrl(String shortUri, ServletRequest request, ServletResponse response);
+
+    /**
+     * 尝试短链接跳转
+     * 用于 Controller 层判断是否跳转成功
+     *
+     * @param shortUri 短链接后缀
+     * @param request  HttpServletRequest
+     * @param response HttpServletResponse
+     * @return true-跳转成功, false-跳转失败(短链接不存在或过期)
+     */
+    boolean tryRedirect(String shortUri, jakarta.servlet.http.HttpServletRequest request, 
+                       jakarta.servlet.http.HttpServletResponse response);
 }
