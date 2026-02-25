@@ -89,6 +89,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
                         .validDate(linkDO.getValidDate())
                         .createTime(linkDO.getCreateTime())
                         .describe(linkDO.getDescribe())
+                        .favicon(linkDO.getFavicon())
                         .build())
                 .collect(Collectors.toList()));
 

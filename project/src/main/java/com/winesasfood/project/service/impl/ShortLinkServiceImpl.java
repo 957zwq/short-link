@@ -86,6 +86,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         shortLinkDO.setShortUri(shortLinkSuffix);
         shortLinkDO.setEnableStatus(0);
         shortLinkDO.setFullShortUrl(fullShortUrl);
+        shortLinkDO.setFavicon(getFavicon(requestParam.getOriginUrl()));
 
         // 创建路由表数据
         ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
@@ -152,7 +153,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .validDate(linkDO.getValidDate())
                         .createTime(linkDO.getCreateTime())
                         .describe(linkDO.getDescribe())
-                        .favicon(null)  // 暂未实现
+                        .favicon(linkDO.getFavicon())
                         .build())
                 .collect(Collectors.toList()));
 
@@ -349,5 +350,58 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         // 302 跳转到原始链接
         response.sendRedirect(shortLinkDO.getOriginUrl());
         return true;
+    }
+
+    /**
+     * 获取网站 favicon
+     *
+     * @param url 目标网站 URL
+     * @return favicon URL，获取失败返回 null
+     */
+    @SneakyThrows
+    private String getFavicon(String url) {
+        try {
+            // 规范化 URL
+            String normalizedUrl = url;
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                normalizedUrl = "http://" + url;
+            }
+            
+            // 使用 Jsoup 获取网页并解析 favicon
+            org.jsoup.nodes.Document document = org.jsoup.Jsoup.connect(normalizedUrl)
+                    .timeout(5000)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .followRedirects(true)
+                    .get();
+            
+            // 查找 link 标签中的 icon
+            org.jsoup.nodes.Element faviconLink = document.select("link[rel~=(?i)^(shortcut )?icon]").first();
+            if (faviconLink != null) {
+                String faviconUrl = faviconLink.attr("abs:href");
+                if (StrUtil.isNotBlank(faviconUrl)) {
+                    log.debug("[获取favicon成功] url: {}, favicon: {}", url, faviconUrl);
+                    return faviconUrl;
+                }
+            }
+            
+            // 尝试默认路径 /favicon.ico
+            java.net.URL targetUrl = new java.net.URL(normalizedUrl);
+            String defaultFavicon = targetUrl.getProtocol() + "://" + targetUrl.getHost() + "/favicon.ico";
+            
+            // 检查默认 favicon 是否存在
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(defaultFavicon).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(3000);
+            connection.connect();
+            if (connection.getResponseCode() == java.net.HttpURLConnection.HTTP_OK) {
+                log.debug("[获取默认favicon成功] url: {}, favicon: {}", url, defaultFavicon);
+                return defaultFavicon;
+            }
+            
+            return null;
+        } catch (Exception e) {
+            log.warn("[获取favicon失败] url: {}, error: {}", url, e.getMessage());
+            return null;
+        }
     }
 }
