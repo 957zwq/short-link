@@ -2,6 +2,7 @@ package com.winesasfood.project.service.impl;
 
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,8 +22,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
+import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
+import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
@@ -57,6 +60,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private RedissonClient redissonClient;
+
+    @Autowired
+    private LinkAccessStatsMapper linkAccessStatsMapper;
 
     private static final int MAX_RETRY = 10;
 
@@ -248,7 +254,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             if (StrUtil.isNotBlank(cachedGid)) {
                 // 缓存命中，直接获取 gid
                 log.debug("[缓存命中] shortUrl: {}, gid: {}", fullShortUrl, cachedGid);
-                return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, response, nullCacheKey);
+                return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, request, response, nullCacheKey);
             }
 
             // 3. 缓存未命中，使用分布式锁防止缓存击穿
@@ -270,7 +276,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     if ("null".equals(cachedGid)) {
                         return false;
                     }
-                    return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, response, nullCacheKey);
+                    return redirectToOriginUrlWithResult(cachedGid, fullShortUrl, request, response, nullCacheKey);
                 }
 
                 // 4. 查询数据库（goto 表）
@@ -292,7 +298,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 log.debug("[缓存写入] shortUrl: {}, gid: {}", fullShortUrl, gid);
 
                 // 5. 查询短链接表并跳转
-                return redirectToOriginUrlWithResult(gid, fullShortUrl, response, nullCacheKey);
+                return redirectToOriginUrlWithResult(gid, fullShortUrl, request, response, nullCacheKey);
 
             } finally {
                 // 释放锁
@@ -324,7 +330,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
      * @return true-跳转成功, false-跳转失败
      */
     @SneakyThrows
-    private boolean redirectToOriginUrlWithResult(String gid, String fullShortUrl, HttpServletResponse response, String nullCacheKey) {
+    private boolean redirectToOriginUrlWithResult(String gid, String fullShortUrl, HttpServletRequest request, HttpServletResponse response, String nullCacheKey) {
         LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
                 .eq(ShortLinkDO::getGid, gid)
                 .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
@@ -347,9 +353,114 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         }
 
+        // 记录访问统计
+        shortLinkStats(fullShortUrl, request);
+
         // 302 跳转到原始链接
         response.sendRedirect(shortLinkDO.getOriginUrl());
         return true;
+    }
+
+    /**
+     * 记录短链接访问统计
+     *
+     * @param fullShortUrl 完整短链接
+     * @param request      HTTP请求
+     */
+    private void shortLinkStats(String fullShortUrl, HttpServletRequest request) {
+        try {
+            // 获取当前时间信息
+            java.util.Date now = new java.util.Date();
+            int hour = DateUtil.hour(now, true);
+            int weekday = DateUtil.dayOfWeekEnum(now).getIso8601Value();
+            String dateStr = DateUtil.format(now, "yyyyMMdd");
+
+            // 获取客户端 IP
+            String clientIp = getClientIp(request);
+
+            // 使用 Redis 判断 UV 和 UIP
+            String uvKey = RedisKeyConstant.getShortLinkUvKey(fullShortUrl, dateStr);
+            String uipKey = RedisKeyConstant.getShortLinkUipKey(fullShortUrl, dateStr);
+
+            // 判断是否为新访客（UV）
+            Boolean isNewUv = stringRedisTemplate.opsForSet().add(uvKey, getClientIdentifier(request)) == 1;
+            if (isNewUv) {
+                stringRedisTemplate.expire(uvKey, 1, TimeUnit.DAYS);
+            }
+
+            // 判断是否为新 IP（UIP）
+            Boolean isNewUip = stringRedisTemplate.opsForSet().add(uipKey, clientIp) == 1;
+            if (isNewUip) {
+                stringRedisTemplate.expire(uipKey, 1, TimeUnit.DAYS);
+            }
+
+            // 构建统计数据
+            LinkAccessStatsDO linkAccessStatsDO = LinkAccessStatsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .date(now)
+                    .pv(1)
+                    .uv(isNewUv ? 1 : 0)
+                    .uip(isNewUip ? 1 : 0)
+                    .hour(hour)
+                    .weekday(weekday)
+                    .build();
+
+            // 写入数据库（使用 ON DUPLICATE KEY UPDATE）
+            linkAccessStatsMapper.shortLinkStats(linkAccessStatsDO);
+
+            // 更新短链接总点击量
+            baseMapper.incrementClickNum(fullShortUrl);
+
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}", fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0);
+        } catch (Exception e) {
+            log.error("[访问统计异常] shortUrl: {}", fullShortUrl, e);
+        }
+    }
+
+    /**
+     * 获取客户端 IP
+     */
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (StrUtil.isBlank(ip) || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        // 多个代理时取第一个 IP
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip;
+    }
+
+    /**
+     * 获取客户端唯一标识（用于 UV 统计）
+     */
+    private String getClientIdentifier(HttpServletRequest request) {
+        // 优先使用 Cookie 中的标识
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if ("sl_visitor".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        // 没有则使用 IP + User-Agent 生成标识
+        String ip = getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+        return cn.hutool.crypto.SecureUtil.md5(ip + userAgent);
     }
 
     /**

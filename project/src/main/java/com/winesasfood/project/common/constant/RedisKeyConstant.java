@@ -29,6 +29,20 @@ public class RedisKeyConstant {
     public static final String SHORT_URI_CREATE_BLOOM_FILTER = "shortUriCreateCachePenetrationBloomFilter";
 
     /**
+     * 短链接 UV 统计 Key
+     * %s: fullShortUrl（完整短链接）
+     * %s: yyyyMMdd 格式的日期
+     */
+    public static final String SHORT_LINK_UV_KEY = "short:link:uv:%s:%s";
+
+    /**
+     * 短链接 UIP 统计 Key
+     * %s: fullShortUrl（完整短链接）
+     * %s: yyyyMMdd 格式的日期
+     */
+    public static final String SHORT_LINK_UIP_KEY = "short:link:uip:%s:%s";
+
+    /**
      * 获取短链接跳转路由缓存 Key
      *
      * @param fullShortUrl 完整短链接
@@ -56,5 +70,27 @@ public class RedisKeyConstant {
      */
     public static String getLockGotoShortLinkKey(String fullShortUrl) {
         return String.format(LOCK_GOTO_SHORT_LINK_KEY, fullShortUrl);
+    }
+
+    /**
+     * 获取短链接 UV 统计 Key
+     *
+     * @param fullShortUrl 完整短链接
+     * @param date         yyyyMMdd 格式的日期
+     * @return Redis UV Key
+     */
+    public static String getShortLinkUvKey(String fullShortUrl, String date) {
+        return String.format(SHORT_LINK_UV_KEY, fullShortUrl, date);
+    }
+
+    /**
+     * 获取短链接 UIP 统计 Key
+     *
+     * @param fullShortUrl 完整短链接
+     * @param date         yyyyMMdd 格式的日期
+     * @return Redis UIP Key
+     */
+    public static String getShortLinkUipKey(String fullShortUrl, String date) {
+        return String.format(SHORT_LINK_UIP_KEY, fullShortUrl, date);
     }
 }
