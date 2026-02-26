@@ -23,9 +23,11 @@ import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
+import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
 import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
+import com.winesasfood.project.dao.mapper.LinkOsStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
 import com.winesasfood.project.dto.req.ShortLinkCreateReqDTO;
@@ -63,6 +65,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkAccessStatsMapper linkAccessStatsMapper;
+
+    @Autowired
+    private LinkOsStatsMapper linkOsStatsMapper;
 
     private static final int MAX_RETRY = 10;
 
@@ -408,10 +413,20 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             // 写入数据库（使用 ON DUPLICATE KEY UPDATE）
             linkAccessStatsMapper.shortLinkStats(linkAccessStatsDO);
 
+            // 记录操作系统访问统计
+            String os = parseOs(request.getHeader("User-Agent"));
+            LinkOsStatsDO linkOsStatsDO = LinkOsStatsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .date(now)
+                    .cnt(1)
+                    .os(os)
+                    .build();
+            linkOsStatsMapper.shortLinkOsStats(linkOsStatsDO);
+
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
 
-            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}", fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0);
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}", fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os);
         } catch (Exception e) {
             log.error("[访问统计异常] shortUrl: {}", fullShortUrl, e);
         }
@@ -461,6 +476,65 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
         return cn.hutool.crypto.SecureUtil.md5(ip + userAgent);
+    }
+
+    /**
+     * 解析 User-Agent 中的操作系统信息
+     *
+     * @param userAgent User-Agent 字符串
+     * @return 操作系统名称
+     */
+    private String parseOs(String userAgent) {
+        if (StrUtil.isBlank(userAgent)) {
+            return "Unknown";
+        }
+        userAgent = userAgent.toLowerCase();
+
+        // Windows
+        if (userAgent.contains("windows nt 10")) {
+            return "Windows 10";
+        } else if (userAgent.contains("windows nt 6.3")) {
+            return "Windows 8.1";
+        } else if (userAgent.contains("windows nt 6.2")) {
+            return "Windows 8";
+        } else if (userAgent.contains("windows nt 6.1")) {
+            return "Windows 7";
+        } else if (userAgent.contains("windows nt 6.0")) {
+            return "Windows Vista";
+        } else if (userAgent.contains("windows nt 5.1") || userAgent.contains("windows xp")) {
+            return "Windows XP";
+        } else if (userAgent.contains("windows")) {
+            return "Windows";
+        }
+
+        // macOS
+        if (userAgent.contains("mac os x")) {
+            return "macOS";
+        } else if (userAgent.contains("macintosh")) {
+            return "Macintosh";
+        }
+
+        // Linux
+        if (userAgent.contains("android")) {
+            return "Android";
+        } else if (userAgent.contains("iphone") || userAgent.contains("ipad")) {
+            return "iOS";
+        } else if (userAgent.contains("linux")) {
+            return "Linux";
+        }
+
+        // 其他
+        if (userAgent.contains("crayos")) {
+            return "CrayOS";
+        } else if (userAgent.contains("solaris")) {
+            return "Solaris";
+        } else if (userAgent.contains("freebsd")) {
+            return "FreeBSD";
+        } else if (userAgent.contains("aix")) {
+            return "AIX";
+        }
+
+        return "Unknown";
     }
 
     /**
