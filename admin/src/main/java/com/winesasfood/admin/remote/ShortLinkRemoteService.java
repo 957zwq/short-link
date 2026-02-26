@@ -13,10 +13,12 @@ import com.winesasfood.admin.remote.dto.req.RecycleBinRemoveReqDTO;
 import com.winesasfood.admin.remote.dto.req.RecycleBinSaveReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkCreateReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkPageReqDTO;
+import com.winesasfood.admin.remote.dto.req.ShortLinkStatsReqDTO;
 import com.winesasfood.admin.remote.dto.req.ShortLinkUpdateReqDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkCreateRespDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.winesasfood.admin.remote.dto.resp.ShortLinkPageRespDTO;
+import com.winesasfood.admin.remote.dto.resp.ShortLinkStatsRespDTO;
 
 import java.util.HashMap;
 import java.util.List;
@@ -186,6 +188,31 @@ public interface ShortLinkRemoteService {
         result.setCode(resultJson.getStr("code"));
         result.setMessage(resultJson.getStr("message"));
         result.setRequestId(resultJson.getStr("requestId"));
+        return result;
+    }
+
+    /**
+     * 获取单个短链接监控统计数据
+     *
+     * @param requestParam 统计请求参数
+     * @return 短链接统计数据
+     */
+    default Result<ShortLinkStatsRespDTO> oneShortLinkStats(ShortLinkStatsReqDTO requestParam) {
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("fullShortUrl", requestParam.getFullShortUrl());
+        requestMap.put("gid", requestParam.getGid());
+        requestMap.put("startDate", requestParam.getStartDate());
+        requestMap.put("endDate", requestParam.getEndDate());
+        String resultBodyStr = HttpUtil.get(PROJECT_HOST + "/api/short-link/v1/stats", requestMap);
+        JSONObject resultJson = JSONUtil.parseObj(resultBodyStr);
+        Result<ShortLinkStatsRespDTO> result = new Result<>();
+        result.setCode(resultJson.getStr("code"));
+        result.setMessage(resultJson.getStr("message"));
+        result.setRequestId(resultJson.getStr("requestId"));
+        if (resultJson.getJSONObject("data") != null) {
+            ShortLinkStatsRespDTO data = resultJson.getJSONObject("data").toBean(ShortLinkStatsRespDTO.class);
+            result.setData(data);
+        }
         return result;
     }
 }
