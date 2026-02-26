@@ -23,10 +23,12 @@ import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
+import com.winesasfood.project.dao.entity.LinkLocaleStatsDO;
 import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
 import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
+import com.winesasfood.project.dao.mapper.LinkLocaleStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkOsStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
@@ -68,6 +70,15 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkOsStatsMapper linkOsStatsMapper;
+
+    @Autowired
+    private LinkLocaleStatsMapper linkLocaleStatsMapper;
+
+    @org.springframework.beans.factory.annotation.Value("${amap.key}")
+    private String amapKey;
+
+    @org.springframework.beans.factory.annotation.Value("${amap.ip-url}")
+    private String amapIpUrl;
 
     private static final int MAX_RETRY = 10;
 
@@ -359,7 +370,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         // 记录访问统计
-        shortLinkStats(fullShortUrl, request);
+        shortLinkStats(gid, fullShortUrl, request);
 
         // 302 跳转到原始链接
         response.sendRedirect(shortLinkDO.getOriginUrl());
@@ -369,10 +380,11 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     /**
      * 记录短链接访问统计
      *
+     * @param gid          分组标识
      * @param fullShortUrl 完整短链接
      * @param request      HTTP请求
      */
-    private void shortLinkStats(String fullShortUrl, HttpServletRequest request) {
+    private void shortLinkStats(String gid, String fullShortUrl, HttpServletRequest request) {
         try {
             // 获取当前时间信息
             java.util.Date now = new java.util.Date();
@@ -423,10 +435,23 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .build();
             linkOsStatsMapper.shortLinkOsStats(linkOsStatsDO);
 
+            // 记录地区访问统计
+            LinkLocaleStatsDO localeStats = getLocaleByIp(clientIp);
+            if (localeStats != null) {
+                localeStats.setFullShortUrl(fullShortUrl);
+                localeStats.setGid(gid);
+                localeStats.setDate(now);
+                localeStats.setCnt(1);
+                linkLocaleStatsMapper.shortLinkLocaleState(localeStats);
+            }
+
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
 
-            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}", fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os);
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, province={}, city={}",
+                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os,
+                    localeStats != null ? localeStats.getProvince() : "unknown",
+                    localeStats != null ? localeStats.getCity() : "unknown");
         } catch (Exception e) {
             log.error("[访问统计异常] shortUrl: {}", fullShortUrl, e);
         }
@@ -535,6 +560,109 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         return "Unknown";
+    }
+
+    /**
+     * 根据IP地址获取地区信息（调用高德API）
+     *
+     * @param ip IP地址
+     * @return 地区统计信息，失败返回null
+     */
+    private LinkLocaleStatsDO getLocaleByIp(String ip) {
+        try {
+            // 跳过局域网IP和本地IP
+            if (StrUtil.isBlank(ip) || isLocalIp(ip)) {
+                return LinkLocaleStatsDO.builder()
+                        .country("中国")
+                        .province("局域网")
+                        .city("局域网")
+                        .adcode("")
+                        .build();
+            }
+
+            // 构建高德API请求URL
+            String requestUrl = String.format("%s?key=%s&ip=%s", amapIpUrl, amapKey, ip);
+
+            // 使用 Hutool 发送HTTP请求
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpUtil.createGet(requestUrl)
+                    .timeout(3000)
+                    .execute();
+
+            if (!response.isOk()) {
+                log.warn("[高德API请求失败] ip: {}, status: {}", ip, response.getStatus());
+                return null;
+            }
+
+            String body = response.body();
+            cn.hutool.json.JSONObject json = cn.hutool.json.JSONUtil.parseObj(body);
+
+            // 检查返回状态
+            String status = json.getStr("status");
+            if (!"1".equals(status)) {
+                log.warn("[高德API返回错误] ip: {}, info: {}", ip, json.getStr("info"));
+                return null;
+            }
+
+            String province = json.getStr("province");
+            String city = json.getStr("city");
+            String adcode = json.getStr("adcode");
+
+            // 处理空值情况（国外IP或非法IP）
+            if (StrUtil.isBlank(province)) {
+                return LinkLocaleStatsDO.builder()
+                        .country("未知")
+                        .province("未知")
+                        .city("未知")
+                        .adcode("")
+                        .build();
+            }
+
+            // 处理直辖市情况（city可能为空）
+            if (StrUtil.isBlank(city) || "[]".equals(city)) {
+                city = province;
+            }
+
+            return LinkLocaleStatsDO.builder()
+                    .country("中国")
+                    .province(province)
+                    .city(city)
+                    .adcode(adcode != null ? adcode : "")
+                    .build();
+
+        } catch (Exception e) {
+            log.warn("[获取地区信息失败] ip: {}, error: {}", ip, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 判断是否为局域网IP或本地IP
+     */
+    private boolean isLocalIp(String ip) {
+        if (StrUtil.isBlank(ip)) {
+            return true;
+        }
+        return ip.startsWith("10.")
+                || ip.startsWith("192.168.")
+                || ip.startsWith("172.16.")
+                || ip.startsWith("172.17.")
+                || ip.startsWith("172.18.")
+                || ip.startsWith("172.19.")
+                || ip.startsWith("172.20.")
+                || ip.startsWith("172.21.")
+                || ip.startsWith("172.22.")
+                || ip.startsWith("172.23.")
+                || ip.startsWith("172.24.")
+                || ip.startsWith("172.25.")
+                || ip.startsWith("172.26.")
+                || ip.startsWith("172.27.")
+                || ip.startsWith("172.28.")
+                || ip.startsWith("172.29.")
+                || ip.startsWith("172.30.")
+                || ip.startsWith("172.31.")
+                || ip.startsWith("127.")
+                || ip.equals("0:0:0:0:0:0:0:1")
+                || ip.equals("::1");
     }
 
     /**

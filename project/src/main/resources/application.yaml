@@ -1,5 +1,11 @@
 server:
   port: 8001
+
+# 高德地图API配置
+amap:
+  key: 824c511f0997586ea016f979fdb23087
+  ip-url: https://restapi.amap.com/v3/ip
+
 spring:
   datasource:
     # ShardingSphere 对 Driver 自定义，实现分库分表等隐藏逻辑
