@@ -24,12 +24,14 @@ import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
 import com.winesasfood.project.dao.entity.LinkBrowserStatsDO;
+import com.winesasfood.project.dao.entity.LinkDeviceStatsDO;
 import com.winesasfood.project.dao.entity.LinkLocaleStatsDO;
 import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
 import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkBrowserStatsMapper;
+import com.winesasfood.project.dao.mapper.LinkDeviceStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkLocaleStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkOsStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
@@ -78,6 +80,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkBrowserStatsMapper linkBrowserStatsMapper;
+
+    @Autowired
+    private LinkDeviceStatsMapper linkDeviceStatsMapper;
 
     @org.springframework.beans.factory.annotation.Value("${amap.key}")
     private String amapKey;
@@ -451,6 +456,16 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .build();
             linkBrowserStatsMapper.shortLinkBrowserStats(linkBrowserStatsDO);
 
+            // 记录设备访问统计
+            String device = parseDevice(userAgent);
+            LinkDeviceStatsDO linkDeviceStatsDO = LinkDeviceStatsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .date(now)
+                    .cnt(1)
+                    .device(device)
+                    .build();
+            linkDeviceStatsMapper.shortLinkDeviceStats(linkDeviceStatsDO);
+
             // 记录地区访问统计
             LinkLocaleStatsDO localeStats = getLocaleByIp(clientIp);
             if (localeStats != null) {
@@ -464,8 +479,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
 
-            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, browser={}, province={}, city={}",
-                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os, browser,
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, browser={}, device={}, province={}, city={}",
+                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os, browser, device,
                     localeStats != null ? localeStats.getProvince() : "unknown",
                     localeStats != null ? localeStats.getCity() : "unknown");
         } catch (Exception e) {
@@ -651,6 +666,51 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
 
         return "Unknown";
+    }
+
+    /**
+     * 解析 User-Agent 中的设备信息
+     *
+     * @param userAgent User-Agent 字符串
+     * @return 设备类型
+     */
+    private String parseDevice(String userAgent) {
+        if (StrUtil.isBlank(userAgent)) {
+            return "Unknown";
+        }
+        userAgent = userAgent.toLowerCase();
+
+        // 平板设备
+        if (userAgent.contains("ipad") || userAgent.contains("tablet") || userAgent.contains("playbook")) {
+            return "Tablet";
+        }
+
+        // 移动设备
+        if (userAgent.contains("mobile") || userAgent.contains("iphone") || userAgent.contains("android") ||
+                userAgent.contains("phone") || userAgent.contains("ipod") || userAgent.contains("blackberry") ||
+                userAgent.contains("windows phone") || userAgent.contains("webos")) {
+            return "Mobile";
+        }
+
+        // 智能电视
+        if (userAgent.contains("smart-tv") || userAgent.contains("smarttv") || userAgent.contains("tv") ||
+                userAgent.contains("appletv") || userAgent.contains("roku")) {
+            return "TV";
+        }
+
+        // 游戏机
+        if (userAgent.contains("playstation") || userAgent.contains("xbox") || userAgent.contains("nintendo")) {
+            return "GameConsole";
+        }
+
+        // 爬虫/机器人
+        if (userAgent.contains("bot") || userAgent.contains("spider") || userAgent.contains("crawler") ||
+                userAgent.contains("slurp") || userAgent.contains("googlebot")) {
+            return "Bot";
+        }
+
+        // 默认为PC
+        return "PC";
     }
 
     /**
