@@ -23,11 +23,13 @@ import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
 import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
+import com.winesasfood.project.dao.entity.LinkBrowserStatsDO;
 import com.winesasfood.project.dao.entity.LinkLocaleStatsDO;
 import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
 import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
+import com.winesasfood.project.dao.mapper.LinkBrowserStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkLocaleStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkOsStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
@@ -73,6 +75,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkLocaleStatsMapper linkLocaleStatsMapper;
+
+    @Autowired
+    private LinkBrowserStatsMapper linkBrowserStatsMapper;
 
     @org.springframework.beans.factory.annotation.Value("${amap.key}")
     private String amapKey;
@@ -426,7 +431,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             linkAccessStatsMapper.shortLinkStats(linkAccessStatsDO);
 
             // 记录操作系统访问统计
-            String os = parseOs(request.getHeader("User-Agent"));
+            String userAgent = request.getHeader("User-Agent");
+            String os = parseOs(userAgent);
             LinkOsStatsDO linkOsStatsDO = LinkOsStatsDO.builder()
                     .fullShortUrl(fullShortUrl)
                     .date(now)
@@ -434,6 +440,16 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .os(os)
                     .build();
             linkOsStatsMapper.shortLinkOsStats(linkOsStatsDO);
+
+            // 记录浏览器访问统计
+            String browser = parseBrowser(userAgent);
+            LinkBrowserStatsDO linkBrowserStatsDO = LinkBrowserStatsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .date(now)
+                    .cnt(1)
+                    .browser(browser)
+                    .build();
+            linkBrowserStatsMapper.shortLinkBrowserStats(linkBrowserStatsDO);
 
             // 记录地区访问统计
             LinkLocaleStatsDO localeStats = getLocaleByIp(clientIp);
@@ -448,8 +464,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
 
-            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, province={}, city={}",
-                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os,
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, browser={}, province={}, city={}",
+                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os, browser,
                     localeStats != null ? localeStats.getProvince() : "unknown",
                     localeStats != null ? localeStats.getCity() : "unknown");
         } catch (Exception e) {
@@ -557,6 +573,81 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             return "FreeBSD";
         } else if (userAgent.contains("aix")) {
             return "AIX";
+        }
+
+        return "Unknown";
+    }
+
+    /**
+     * 解析 User-Agent 中的浏览器信息
+     *
+     * @param userAgent User-Agent 字符串
+     * @return 浏览器名称
+     */
+    private String parseBrowser(String userAgent) {
+        if (StrUtil.isBlank(userAgent)) {
+            return "Unknown";
+        }
+        userAgent = userAgent.toLowerCase();
+
+        // Edge (Chromium)
+        if (userAgent.contains("edg/")) {
+            return "Edge";
+        }
+
+        // Chrome (需要在 Safari 之前判断，因为 Chrome UA 也包含 Safari)
+        if (userAgent.contains("chrome/") && !userAgent.contains("chromium")) {
+            return "Chrome";
+        }
+
+        // Chromium
+        if (userAgent.contains("chromium")) {
+            return "Chromium";
+        }
+
+        // Firefox
+        if (userAgent.contains("firefox/")) {
+            return "Firefox";
+        }
+
+        // Safari (需要在 Chrome 之后判断，因为 Chrome UA 也包含 Safari)
+        if (userAgent.contains("safari/") && !userAgent.contains("chrome/")) {
+            return "Safari";
+        }
+
+        // Opera
+        if (userAgent.contains("opr/") || userAgent.contains("opera/")) {
+            return "Opera";
+        }
+
+        // IE
+        if (userAgent.contains("msie") || userAgent.contains("trident/")) {
+            return "IE";
+        }
+
+        // 360浏览器
+        if (userAgent.contains("360se") || userAgent.contains("360ee")) {
+            return "360";
+        }
+
+        // QQ浏览器
+        if (userAgent.contains("qqbrowser/")) {
+            return "QQBrowser";
+        }
+
+        // UC浏览器
+        if (userAgent.contains("ucbrowser/") || userAgent.contains("ubrowser/")) {
+            return "UC";
+        }
+
+        // 微信内置浏览器
+        if (userAgent.contains("micromessenger")) {
+            return "WeChat";
+        }
+
+        // 微博内置浏览器
+        if (userAgent.contains("weibo")) {
+            return "Weibo";
         }
 
         return "Unknown";
