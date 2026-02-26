@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.winesasfood.project.common.convention.exception.ServiceException;
 import com.winesasfood.project.common.enums.VailDateTypeEnum;
+import com.winesasfood.project.dao.entity.LinkAccessLogsDO;
 import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
 import com.winesasfood.project.dao.entity.LinkBrowserStatsDO;
 import com.winesasfood.project.dao.entity.LinkDeviceStatsDO;
@@ -30,6 +31,7 @@ import com.winesasfood.project.dao.entity.LinkNetworkStatsDO;
 import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
+import com.winesasfood.project.dao.mapper.LinkAccessLogsMapper;
 import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkBrowserStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkDeviceStatsMapper;
@@ -88,6 +90,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkNetworkStatsMapper linkNetworkStatsMapper;
+
+    @Autowired
+    private LinkAccessLogsMapper linkAccessLogsMapper;
 
     @org.springframework.beans.factory.annotation.Value("${amap.key}")
     private String amapKey;
@@ -490,6 +495,21 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 localeStats.setCnt(1);
                 linkLocaleStatsMapper.shortLinkLocaleState(localeStats);
             }
+
+            // 记录访问日志
+            String localeStr = localeStats != null ?
+                    String.join(" ", localeStats.getCountry(), localeStats.getProvince(), localeStats.getCity()).trim() : "Unknown";
+            LinkAccessLogsDO linkAccessLogsDO = LinkAccessLogsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .user(getClientIdentifier(request))
+                    .ip(clientIp)
+                    .browser(browser)
+                    .os(os)
+                    .network(network)
+                    .device(device)
+                    .locale(localeStr)
+                    .build();
+            linkAccessLogsMapper.shortLinkAccessLogs(linkAccessLogsDO);
 
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
