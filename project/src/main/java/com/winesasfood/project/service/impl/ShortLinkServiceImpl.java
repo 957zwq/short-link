@@ -26,6 +26,7 @@ import com.winesasfood.project.dao.entity.LinkAccessStatsDO;
 import com.winesasfood.project.dao.entity.LinkBrowserStatsDO;
 import com.winesasfood.project.dao.entity.LinkDeviceStatsDO;
 import com.winesasfood.project.dao.entity.LinkLocaleStatsDO;
+import com.winesasfood.project.dao.entity.LinkNetworkStatsDO;
 import com.winesasfood.project.dao.entity.LinkOsStatsDO;
 import com.winesasfood.project.dao.entity.ShortLinkDO;
 import com.winesasfood.project.dao.entity.ShortLinkGotoDO;
@@ -33,6 +34,7 @@ import com.winesasfood.project.dao.mapper.LinkAccessStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkBrowserStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkDeviceStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkLocaleStatsMapper;
+import com.winesasfood.project.dao.mapper.LinkNetworkStatsMapper;
 import com.winesasfood.project.dao.mapper.LinkOsStatsMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkGotoMapper;
 import com.winesasfood.project.dao.mapper.ShortLinkMapper;
@@ -83,6 +85,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Autowired
     private LinkDeviceStatsMapper linkDeviceStatsMapper;
+
+    @Autowired
+    private LinkNetworkStatsMapper linkNetworkStatsMapper;
 
     @org.springframework.beans.factory.annotation.Value("${amap.key}")
     private String amapKey;
@@ -466,6 +471,16 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .build();
             linkDeviceStatsMapper.shortLinkDeviceStats(linkDeviceStatsDO);
 
+            // 记录网络访问统计
+            String network = parseNetwork(userAgent);
+            LinkNetworkStatsDO linkNetworkStatsDO = LinkNetworkStatsDO.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .date(now)
+                    .cnt(1)
+                    .network(network)
+                    .build();
+            linkNetworkStatsMapper.shortLinkNetworkStats(linkNetworkStatsDO);
+
             // 记录地区访问统计
             LinkLocaleStatsDO localeStats = getLocaleByIp(clientIp);
             if (localeStats != null) {
@@ -479,8 +494,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             // 更新短链接总点击量
             baseMapper.incrementClickNum(fullShortUrl);
 
-            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, browser={}, device={}, province={}, city={}",
-                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os, browser, device,
+            log.debug("[访问统计] shortUrl: {}, pv=1, uv={}, uip={}, os={}, browser={}, device={}, network={}, province={}, city={}",
+                    fullShortUrl, isNewUv ? 1 : 0, isNewUip ? 1 : 0, os, browser, device, network,
                     localeStats != null ? localeStats.getProvince() : "unknown",
                     localeStats != null ? localeStats.getCity() : "unknown");
         } catch (Exception e) {
@@ -711,6 +726,53 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
         // 默认为PC
         return "PC";
+    }
+
+    /**
+     * 解析 User-Agent 中的网络信息
+     *
+     * @param userAgent User-Agent 字符串
+     * @return 网络类型
+     */
+    private String parseNetwork(String userAgent) {
+        if (StrUtil.isBlank(userAgent)) {
+            return "Unknown";
+        }
+        userAgent = userAgent.toLowerCase();
+
+        // 5G 网络
+        if (userAgent.contains("5g") || userAgent.contains("nr/")) {
+            return "5G";
+        }
+
+        // 4G / LTE 网络
+        if (userAgent.contains("4g") || userAgent.contains("lte") || userAgent.contains("lte/")) {
+            return "4G";
+        }
+
+        // 3G 网络
+        if (userAgent.contains("3g") || userAgent.contains("umts") || userAgent.contains("hsdpa") ||
+                userAgent.contains("hsupa") || userAgent.contains("hspa+") || userAgent.contains("cdma") ||
+                userAgent.contains("evdo") || userAgent.contains("wcdma")) {
+            return "3G";
+        }
+
+        // 2G 网络
+        if (userAgent.contains("2g") || userAgent.contains("gprs") || userAgent.contains("edge") ||
+                userAgent.contains("gsm")) {
+            return "2G";
+        }
+
+        // WiFi（通常移动设备通过 WiFi 访问时 UA 中不包含网络类型标识）
+        // 如果是移动设备但没有移动网络标识，则认为是 WiFi
+        boolean isMobileDevice = userAgent.contains("mobile") || userAgent.contains("iphone") ||
+                userAgent.contains("android") || userAgent.contains("ipad");
+        if (isMobileDevice) {
+            return "WiFi";
+        }
+
+        // PC 端默认为有线网络
+        return "Wired";
     }
 
     /**
